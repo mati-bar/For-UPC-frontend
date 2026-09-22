@@ -13,7 +13,7 @@ export default function App() {
   return (
     <Box sx={{ backgroundColor: '#f8fafc', minHeight: '100vh', pb: 12 }}>
       
-      {/* 1. NAVBAR INSTITUCIONAL (Replicando el diseño de tu compañero) */}
+      {/* 1. NAVBAR INSTITUCIONAL */}
       <AppBar position="sticky" elevation={1} sx={{ backgroundColor: 'white', color: 'text.primary', borderBottom: '1px solid #e2e8f0' }}>
         <Container maxWidth="lg">
           <Toolbar disableGutters sx={{ justifyContent: 'space-between' }}>
