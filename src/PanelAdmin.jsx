@@ -1,158 +1,254 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-AppBar, Toolbar, Typography, Box, Avatar, Card, CardContent, 
-Button, Chip, IconButton, Divider, List, ListItem, ListItemIcon, ListItemText,
-Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Badge
+  Box, Container, Typography, Card, CardContent, 
+  TextField, Button, MenuItem, Grid, Divider, Paper,
+  Chip, IconButton, Stack, Alert
 } from '@mui/material';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import ForumIcon from '@mui/icons-material/Forum';
-import PeopleIcon from '@mui/icons-material/People';
-import SecurityIcon from '@mui/icons-material/Security';
-import AddIcon from '@mui/icons-material/Add';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
+import { Add, Logout, Delete, Campaign } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext'; // Asegura la ruta correcta a tu AuthContext
 
 export default function PanelAdmin() {
-return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: '#f1f5f9' }}>
-    
-      {/* Navbar Superior */}
-    <AppBar position="sticky" elevation={0} sx={{ backgroundColor: '#0f2c59', color: 'white' }}>
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
-        
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ bgcolor: '#dc2626', color: 'white', p: 0.5, px: 1, borderRadius: 1, fontWeight: 'bold', fontSize: '0.8rem' }}>
-                UPC
-            </Box>
-            <Typography variant="h6" sx={{ fontWeight: 'bold', letterSpacing: 1 }}>FOR UPC</Typography>
-            </Box>
-            <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(255,255,255,0.2)', my: 2 }} />
-            <Chip 
-            icon={<SecurityIcon style={{ color: '#fcd34d' }} fontSize="small" />} 
-            label="Modo Administrador" 
-            size="small" 
-            sx={{ bgcolor: 'rgba(245, 158, 11, 0.2)', color: '#fcd34d', border: '1px solid rgba(245, 158, 11, 0.4)', fontWeight: 'bold' }} 
-            />
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  // Estados del formulario
+  const [titulo, setTitulo] = useState('');
+  const [contenido, setContenido] = useState('');
+  const [carreraDestino, setCarreraDestino] = useState('');
+  const [anioDestino, setAnioDestino] = useState('');
+  
+  // Lista de publicaciones guardadas
+  const [publicaciones, setPublicaciones] = useState([]);
+  const [mensajeExito, setMensajeExito] = useState(false);
+
+  // Cargar publicaciones persistidas al montar el componente
+  useEffect(() => {
+    const dataGuardada = localStorage.getItem('upc_publicaciones');
+    if (dataGuardada) {
+      setPublicaciones(JSON.parse(dataGuardada));
+    }
+  }, []);
+
+  const handlePublicar = (e) => {
+    e.preventDefault();
+
+    const nuevaPublicacion = {
+      id: Date.now(),
+      titulo,
+      contenido,
+      carreraDestino,
+      anioDestino,
+      autor: user?.nombre || user?.email || 'Administrador',
+      fecha: new Date().toLocaleDateString('es-AR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    };
+
+    const listaActualizada = [nuevaPublicacion, ...publicaciones];
+    setPublicaciones(listaActualizada);
+    localStorage.setItem('upc_publicaciones', JSON.stringify(listaActualizada));
+
+    // Resetear formulario y mostrar feedback
+    setTitulo('');
+    setContenido('');
+    setCarreraDestino('');
+    setAnioDestino('');
+    setMensajeExito(true);
+    setTimeout(() => setMensajeExito(false), 4000);
+  };
+
+  const handleEliminar = (id) => {
+    const filtradas = publicaciones.filter((pub) => pub.id !== id);
+    setPublicaciones(filtradas);
+    localStorage.setItem('upc_publicaciones', JSON.stringify(filtradas));
+  };
+
+  const handleCerrarSesion = () => {
+    logout();
+    navigate('/login');
+  };
+
+  return (
+    <Box sx={{ backgroundColor: '#f1f5f9', minHeight: '100vh', pb: 6 }}>
+      {/* BARRA SUPERIOR INSTITUCIONAL */}
+      <Box sx={{ bgcolor: '#0F2C59', color: 'white', py: 2, px: 4, mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box>
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            Portal Informativo Académico
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#93c5fd' }}>
+            Panel de Administración — Sesión: {user?.nombre || user?.email}
+          </Typography>
         </Box>
+        <Button 
+          variant="outlined" 
+          color="inherit" 
+          size="small" 
+          startIcon={<Logout />}
+          onClick={handleCerrarSesion}
+          sx={{ borderColor: 'rgba(255,255,255,0.5)' }}
+        >
+          Cerrar Sesión
+        </Button>
+      </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Box sx={{ textAlign: 'right', display: { xs: 'none', md: 'block' } }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', lineHeight: 1 }}>Mag. Roberto Cárdenas</Typography>
-            <Typography variant="caption" sx={{ color: '#94a3b8' }}>Coordinación de Calidad Académica</Typography>
+      <Container maxWidth="md">
+        {mensajeExito && (
+          <Alert severity="success" sx={{ mb: 3 }}>
+            Comunicado publicado y guardado exitosamente.
+          </Alert>
+        )}
+
+        {/* FORMULARIO DE NUEVA PUBLICACIÓN */}
+        <Card sx={{ borderRadius: 3, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', mb: 4 }}>
+          <CardContent sx={{ p: 4 }}>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#0B1E3B', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Add color="primary" /> Redactar Nueva Publicación Institucional
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Los avisos publicados aquí se filtrarán automáticamente para los estudiantes según la carrera y el año seleccionados.
+            </Typography>
+
+            <Box component="form" onSubmit={handlePublicar} sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <TextField 
+                label="Título del Comunicado" 
+                fullWidth 
+                required 
+                size="small"
+                value={titulo}
+                onChange={(e) => setTitulo(e.target.value)}
+                placeholder="Ej: Suspensión de clases por mejoras edilicias"
+              />
+
+              <TextField 
+                label="Contenido del Comunicado" 
+                multiline
+                rows={5}
+                fullWidth 
+                required 
+                size="small"
+                value={contenido}
+                onChange={(e) => setContenido(e.target.value)}
+                placeholder="Escribí aquí el comunicado institucional..."
+              />
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    select
+                    label="Carrera Destinataria"
+                    value={carreraDestino}
+                    onChange={(e) => setCarreraDestino(e.target.value)}
+                    fullWidth
+                    required
+                    size="small"
+                  >
+                    <MenuItem value="todas">Todas las Carreras</MenuItem>
+                    <MenuItem value="programacion">Tecnicatura en Programación</MenuItem>
+                    <MenuItem value="geografia">Profesorado en Geografía</MenuItem>
+                    <MenuItem value="enfermeria">Enfermería Profesional</MenuItem>
+                  </TextField>
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    select
+                    label="Año Destinatario"
+                    value={anioDestino}
+                    onChange={(e) => setAnioDestino(e.target.value)}
+                    fullWidth
+                    required
+                    size="small"
+                  >
+                    <MenuItem value="todos">Todos los Años</MenuItem>
+                    <MenuItem value="1">1° Año</MenuItem>
+                    <MenuItem value="2">2° Año</MenuItem>
+                    <MenuItem value="3">3° Año</MenuItem>
+                  </TextField>
+                </Grid>
+              </Grid>
+
+              <Button 
+                type="submit"
+                variant="contained" 
+                size="large" 
+                sx={{ 
+                  bgcolor: '#0F2C59', 
+                  '&:hover': { bgcolor: '#0b1e3b' },
+                  py: 1.5,
+                  fontWeight: 'bold',
+                  mt: 1
+                }}
+              >
+                Publicar y Guardar Comunicado
+              </Button>
             </Box>
-            <Avatar src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=80" sx={{ border: '1px solid #475569' }} />
-        </Box>
-
-        </Toolbar>
-    </AppBar>
-
-      {/* Contenedor Principal: Sidebar + Contenido */}
-    <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
-        
-        {/* Sidebar Lateral */}
-        <Box sx={{ width: 260, bgcolor: 'white', borderRight: '1px solid #e2e8f0', p: 2, display: { xs: 'none', md: 'flex' }, flexDirection: 'column' }}>
-        <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#94a3b8', mb: 2, px: 2 }}>GESTIÓN DE PLATAFORMA</Typography>
-        
-        <List sx={{ flexGrow: 1 }}>
-            <ListItem button sx={{ bgcolor: '#eff6ff', borderRadius: 2, mb: 1, color: '#1e3a8a' }}>
-            <ListItemIcon sx={{ minWidth: 40, color: '#1e3a8a' }}><DashboardIcon fontSize="small" /></ListItemIcon>
-            <ListItemText primary="Cartelera Oficial" primaryTypographyProps={{ fontWeight: 'bold', fontSize: '0.875rem' }} />
-            <Chip label="Activo" size="small" sx={{ height: 20, fontSize: '0.65rem', bgcolor: '#dbeafe', color: '#1e3a8a', fontWeight: 'bold' }} />
-            </ListItem>
-            
-            <ListItem button sx={{ borderRadius: 2, mb: 1, color: '#475569' }}>
-            <ListItemIcon sx={{ minWidth: 40 }}><ForumIcon fontSize="small" /></ListItemIcon>
-            <ListItemText primary="Foros y Categorías" primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 'medium' }} />
-            </ListItem>
-
-            <ListItem button sx={{ borderRadius: 2, mb: 1, color: '#475569' }}>
-            <ListItemIcon sx={{ minWidth: 40 }}><PeopleIcon fontSize="small" /></ListItemIcon>
-            <ListItemText primary="Usuarios" primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 'medium' }} />
-            </ListItem>
-
-            <ListItem button sx={{ borderRadius: 2, mb: 1, color: '#475569' }}>
-            <ListItemIcon sx={{ minWidth: 40 }}><SecurityIcon fontSize="small" /></ListItemIcon>
-            <ListItemText primary="Moderación" primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 'medium' }} />
-            <Badge badgeContent={3} color="error" />
-            </ListItem>
-        </List>
-        </Box>
-
-        {/* Área Central de Trabajo */}
-        <Box sx={{ flexGrow: 1, p: 4, overflowY: 'auto' }}>
-        
-          {/* Módulo de Cartelera */}
-        <Card sx={{ borderRadius: 4, mb: 4, boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)' }}>
-            <CardContent sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Box>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#0f172a' }}>Cartelera Oficial UPC</Typography>
-                <Typography variant="caption" sx={{ color: '#64748b' }}>Comunicados prioritarios visibles para todos los alumnos.</Typography>
-                </Box>
-                <Button variant="contained" startIcon={<AddIcon />} sx={{ bgcolor: '#f59e0b', '&:hover': { bgcolor: '#d97706' }, textTransform: 'none', fontWeight: 'bold', borderRadius: 2 }}>
-                Nuevo Anuncio
-                </Button>
-            </Box>
-
-            <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid #e2e8f0', borderRadius: 2 }}>
-                <Table size="small">
-                <TableHead sx={{ bgcolor: '#f8fafc' }}>
-                    <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#64748b' }}>Título</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#64748b' }}>Fecha</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#64748b' }}>Autor</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#64748b' }}>Alcance</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 'bold', color: '#64748b' }}>Acciones</TableCell>
-                    </TableRow>
-                </TableHead>
-                <TableBody>
-                    <TableRow hover>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#1e293b' }}>Inicio del Periodo de Matrícula 2026-II</TableCell>
-                    <TableCell sx={{ color: '#64748b' }}>14 Sep 2026</TableCell>
-                    <TableCell sx={{ color: '#334155' }}>Secretaría Académica</TableCell>
-                    <TableCell><Chip label="Todos los Campus" size="small" sx={{ bgcolor: '#d1fae5', color: '#065f46', fontWeight: 'bold', fontSize: '0.65rem' }} /></TableCell>
-                    <TableCell align="right">
-                        <IconButton size="small" sx={{ color: '#94a3b8' }}><EditIcon fontSize="small" /></IconButton>
-                        <IconButton size="small" sx={{ color: '#ef4444' }}><DeleteIcon fontSize="small" /></IconButton>
-                    </TableCell>
-                    </TableRow>
-                </TableBody>
-                </Table>
-            </TableContainer>
-            </CardContent>
+          </CardContent>
         </Card>
 
-          {/* Módulo de Moderación */}
-        <Card sx={{ borderRadius: 4, boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)' }}>
-            <CardContent sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#0f172a' }}>Panel de Moderación</Typography>
-                <Chip label="3 pendientes" size="small" sx={{ bgcolor: '#fee2e2', color: '#b91c1c', fontWeight: 'bold' }} />
-            </Box>
-            <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mb: 3 }}>Mensajes marcados por la comunidad que requieren revisión.</Typography>
+        {/* LISTADO DE PUBLICACIONES RECIENTES */}
+        <Paper sx={{ p: 3, borderRadius: 3, bgcolor: 'white' }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#0B1E3B', mb: 2 }}>
+            Publicaciones Realizadas Recientemente ({publicaciones.length})
+          </Typography>
+          <Divider sx={{ mb: 2 }} />
 
-            <Box sx={{ border: '1px solid #e2e8f0', bgcolor: '#f8fafc', borderRadius: 3, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Box>
-                <Chip label="Posible Spam" size="small" sx={{ bgcolor: '#ffe4e6', color: '#9f1239', height: 20, fontSize: '0.65rem', fontWeight: 'bold', mb: 1 }} />
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#0f172a' }}>"Vendo solucionario del parcial de Finanzas 2026-I a 20 soles al DM"</Typography>
-                <Typography variant="caption" sx={{ color: '#64748b' }}>Publicado por @alumno_anon92 en Foro General</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button variant="outlined" startIcon={<CheckCircleIcon />} size="small" sx={{ color: '#059669', borderColor: '#cbd5e1', bgcolor: 'white', textTransform: 'none' }}>
-                    Aprobar
-                </Button>
-                <Button variant="contained" startIcon={<DeleteIcon />} size="small" sx={{ bgcolor: '#dc2626', '&:hover': { bgcolor: '#b91c1c' }, textTransform: 'none' }}>
-                    Eliminar
-                </Button>
-                </Box>
-            </Box>
-            </CardContent>
-        </Card>
+          {publicaciones.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', textAlign: 'center', py: 3 }}>
+              Aún no hay publicaciones cargadas. Crea una desde el formulario superior.
+            </Typography>
+          ) : (
+            <Stack spacing={2}>
+              {publicaciones.map((pub) => (
+                <Card key={pub.id} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Box sx={{ pr: 2 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#0F2C59' }}>
+                        {pub.titulo}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {pub.fecha} — Por: {pub.autor}
+                      </Typography>
+                    </Box>
+                    <IconButton 
+                      color="error" 
+                      size="small" 
+                      onClick={() => handleEliminar(pub.id)}
+                      title="Eliminar publicación"
+                    >
+                      <Delete fontSize="small" />
+                    </IconButton>
+                  </Box>
 
-        </Box>
+                  <Typography variant="body2" sx={{ my: 1.5, whiteSpace: 'pre-line' }}>
+                    {pub.contenido}
+                  </Typography>
+
+                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                    <Chip 
+                      label={`Carrera: ${pub.carreraDestino}`} 
+                      size="small" 
+                      color="primary" 
+                      variant="outlined" 
+                    />
+                    <Chip 
+                      label={`Año: ${pub.anioDestino === 'todos' ? 'Todos' : pub.anioDestino + '°'}`} 
+                      size="small" 
+                      color="secondary" 
+                      variant="outlined" 
+                    />
+                  </Stack>
+                </Card>
+              ))}
+            </Stack>
+          )}
+        </Paper>
+      </Container>
     </Box>
-    </Box>
-);
+  );
 }
