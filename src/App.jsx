@@ -2,8 +2,10 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+
 import Login from './Login';
 import PanelAdmin from './PanelAdmin';
+import VistaForo from './FeedEstudiante';
 
 export default function App() {
   return (
@@ -11,17 +13,15 @@ export default function App() {
       <Router>
         <Routes>
           {/* Ruta pública */}
-          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<Login />} />
 
-          {/* Rutas protegidas */}
-            <Route element={<ProtectedRoute />}>
-            <Route path="/panel" element={<PanelAdmin />} />
-            {/* Agrega aquí más pantallas privadas */}
+          {/* Rutas protegidas anidadas (para que funcione el <Outlet />) */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/feed" element={<VistaForo />} />
+            <Route path="/admin" element={<PanelAdmin />} />
           </Route>
 
-          {/* Redirección por defecto */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
     </AuthProvider>
