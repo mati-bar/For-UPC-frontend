@@ -143,13 +143,35 @@ export default function Login() {
         {/* TARJETA PRINCIPAL */}
         <Card sx={{ borderRadius: 4, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}>
         
-          <Tabs 
-            value={tabValue} onChange={handleTabChange} variant="fullWidth" 
-            sx={{ borderBottom: '1px solid #e2e8f0', '& .MuiTab-root': { fontWeight: 'bold' } }}
-          >
-            <Tab label="Iniciar Sesión" />
-            <Tab label="Registrarse" />
-          </Tabs>
+          <Tabs
+  value={tabValue}
+  onChange={handleTabChange}
+  variant="fullWidth"
+  sx={{
+    borderBottom: '1px solid #e2e8f0',
+    // 1. Color de la barra inferior (indicador)
+    '& .MuiTabs-indicator': {
+      backgroundColor: '#f7a600 !important',
+      height: 3, // Opcional: grosor de la línea
+    },
+    // 2. Estilos de las pestañas
+    '& .MuiTab-root': {
+      color: 'gray',
+      fontWeight: 'bold',
+      // Color del texto al estar seleccionada
+      '&.Mui-selected': {
+        color: '#f7a600 !important',
+      },
+      // 3. Efecto de onda (click/touch) en naranja
+      '& .MuiTouchRipple-root': {
+        color: '#f7a600',
+      },
+    },
+  }}
+>
+  <Tab label="Iniciar Sesión" />
+  <Tab label="Registrarse" />
+</Tabs>
 
           <CardContent sx={{ p: 4 }}>
             {error && (
@@ -160,7 +182,7 @@ export default function Login() {
             
             {/* VISTA 1: INICIAR SESIÓN */}
             {tabValue === 0 && (
-              <Box component="form" onSubmit={handleLoginSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <Box component="form" onSubmit={handleLoginSubmit} sx={{color: '#000000', display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <Typography variant="body2" color="text.secondary">
                   Ingresá con tu correo institucional para acceder a las novedades de tu carrera.
                 </Typography>
@@ -188,7 +210,7 @@ export default function Login() {
                   variant="body2" component="a" href="#recuperar" 
                   onClick={(e) => { e.preventDefault(); alert("Próximamente: Sistema de recuperación de contraseña."); }}
                   sx={{ 
-                    textAlign: 'right', color: '#0F2C59', textDecoration: 'none', 
+                    textAlign: 'right', color: '#000000', textDecoration: 'none', 
                     fontWeight: 'medium', '&:hover': { textDecoration: 'underline' }, mt: -1
                   }}
                 >
@@ -200,7 +222,7 @@ export default function Login() {
                   disabled={loading}
                   variant="contained" 
                   size="large" 
-                  sx={{ bgcolor: '#0F2C59', '&:hover': { bgcolor: '#0b1e3b' }, py: 1.5, fontWeight: 'bold' }}
+                  sx={{ bgcolor: '#f7a600', '&:hover': { bgcolor: '#bc7e01' }, py: 1.5, fontWeight: 'bold' }}
                 >
                   {loading ? 'Ingresando...' : 'Entrar a la Plataforma'}
                 </Button>
@@ -268,7 +290,7 @@ export default function Login() {
                   disabled={loading}
                   variant="contained" 
                   size="large" 
-                  sx={{ bgcolor: '#0F2C59', '&:hover': { bgcolor: '#0b1e3b' }, py: 1.5, fontWeight: 'bold', mt: 1 }}
+                  sx={{ bgcolor: '#f7a600', '&:hover': { bgcolor: '#bc7e01' }, py: 1.5, fontWeight: 'bold', mt: 1 }}
                 >
                   {loading ? 'Registrando...' : 'Completar Registro'}
                 </Button>
