@@ -132,7 +132,7 @@ export default function Login() {
               display: 'inline-block'
             }}
           />
-          <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#0B1E3B' }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#000000' }}>
             Portal Informativo Académico
           </Typography>
           <Typography variant="body2" color="text.secondary">

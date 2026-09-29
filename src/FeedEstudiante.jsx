@@ -19,10 +19,10 @@ return (
       {/* BARRA SUPERIOR DEL ESTUDIANTE */}
     <Box sx={{ bgcolor: '#f7a600', color: 'white', py: 2, px: 4, mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
-        <Typography variant="h6" sx={{ color: '#000000', fontWeight: 'bold' }}>
+        <Typography variant="h6" sx={{ color: '#f1f5f9', fontWeight: 'bold' }}>
             Portal Informativo Académico
         </Typography>
-        <Typography variant="caption" sx={{ color: '#000000', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <Typography variant="caption" sx={{ color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <School fontSize="inherit" /> Tecnicatura en Programación • 2° Año
         </Typography>
         </Box>
@@ -32,7 +32,7 @@ return (
         size="small" 
         startIcon={<Logout />}
         onClick={handleCerrarSesion}
-        sx={{ borderColor: 'rgba(0, 0, 0, 0.5)' }}
+        sx={{ borderColor: 'white' }}
         >
         Cerrar Sesión
         </Button>
@@ -43,32 +43,29 @@ return (
         {/* ENCABEZADO DE LA SECCIÓN */}
         <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
-            <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#0B1E3B' }}>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#000000' }}>
             Novedades y Comunicados
             </Typography>
             <Typography variant="body2" color="text.secondary">
             Información oficial filtrada exclusivamente para tu carrera y año de cursada.
             </Typography>
         </Box>
-        <Chip 
-            icon={<Notifications />} 
-            label="Feed Actualizado" 
-            color="primary" 
-            variant="outlined" 
-        />
+
         </Box>
 
         {/* TARJETA DE COMUNICADO EJEMPLO */}
         <Card sx={{ borderRadius: 3, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', mb: 3 }}>
         <CardContent sx={{ p: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-            <Chip label="Tecnicatura en Programación - 2° Año" size="small" sx={{ bgcolor: '#e0f2fe', color: '#0369a1', fontWeight: 'bold' }} />
+            <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#000000' }}>
+            Tecnicatura en Programación - 2° Año
+            </Typography>
             <Typography variant="caption" color="text.secondary">
                 Hace 2 horas
             </Typography>
             </Box>
             
-            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#0B1E3B', mb: 1 }}>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000', mb: 1 }}>
             Suspensión de clases presenciales por capacitación docente
             </Typography>
             
