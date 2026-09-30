@@ -17,12 +17,12 @@ return (
     <Box sx={{ backgroundColor: '#f1f5f9', minHeight: '100vh', pb: 6 }}>
     
       {/* BARRA SUPERIOR DEL ESTUDIANTE */}
-    <Box sx={{ bgcolor: '#0F2C59', color: 'white', py: 2, px: 4, mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Box sx={{ bgcolor: '#f7a600', color: 'white', py: 2, px: 4, mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
-        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+        <Typography variant="h6" sx={{ color: '#000000', fontWeight: 'bold' }}>
             Portal Informativo Académico
         </Typography>
-        <Typography variant="caption" sx={{ color: '#93c5fd', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <Typography variant="caption" sx={{ color: '#000000', display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <School fontSize="inherit" /> Tecnicatura en Programación • 2° Año
         </Typography>
         </Box>
@@ -32,7 +32,7 @@ return (
         size="small" 
         startIcon={<Logout />}
         onClick={handleCerrarSesion}
-        sx={{ borderColor: 'rgba(255,255,255,0.5)' }}
+        sx={{ borderColor: 'rgba(0, 0, 0, 0.5)' }}
         >
         Cerrar Sesión
         </Button>
