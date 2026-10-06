@@ -20,7 +20,7 @@ export default function EditorAnuncios() {
   return (
     <Box>
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#0B1E3B', mb: 1 }}>Publicar Anuncio</Typography>
+        <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#000000', mb: 1 }}>Publicar Anuncio</Typography>
         <Typography variant="body1" color="text.secondary">Creación de anuncios institucionales para el alumnado.</Typography>
       </Box>
 
@@ -31,7 +31,7 @@ export default function EditorAnuncios() {
             <TextField label="Texto del Anuncio" fullWidth required multiline minRows={5} sx={{ mb: 3 }} placeholder="Escribí el texto acá..." value={contenido} onChange={(e) => setContenido(e.target.value)} />
 
             <Box sx={{ mb: 3, p: 2, border: '1px dashed #cbd5e1', borderRadius: 2, bgcolor: '#f8fafc' }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#0B1E3B', mb: 1.5 }}>Adjuntar archivo o imagen (opcional)</Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#000000', mb: 1.5 }}>Adjuntar archivo o imagen (opcional)</Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                 <Button component="label" variant="outlined" startIcon={<CloudUploadIcon />} sx={{ color: '#0B1E3B', borderColor: '#0B1E3B', textTransform: 'none', '&:hover': { borderColor: '#f7a600', color: '#f7a600' } }}>
                   Seleccionar archivo
