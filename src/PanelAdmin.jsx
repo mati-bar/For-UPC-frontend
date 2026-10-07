@@ -1,158 +1,378 @@
-import React from 'react';
-import { 
-AppBar, Toolbar, Typography, Box, Avatar, Card, CardContent, 
-Button, Chip, IconButton, Divider, List, ListItem, ListItemIcon, ListItemText,
-Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Badge
+import React, { useState } from 'react';
+import {
+  Box,
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Typography,
+  Card,
+  CardActionArea,
+  CardContent,
+  AppBar,
+  Toolbar,
+  Button,
+  Avatar,
 } from '@mui/material';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import ForumIcon from '@mui/icons-material/Forum';
-import PeopleIcon from '@mui/icons-material/People';
-import SecurityIcon from '@mui/icons-material/Security';
-import AddIcon from '@mui/icons-material/Add';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
+import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
+import CampaignRoundedIcon from '@mui/icons-material/CampaignRounded';
+import SchoolRoundedIcon from '@mui/icons-material/SchoolRounded';
+import PeopleAltRoundedIcon from '@mui/icons-material/PeopleAltRounded';
+import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
+import AdminPanelSettingsRoundedIcon from '@mui/icons-material/AdminPanelSettingsRounded';
+import { useNavigate } from 'react-router-dom';
+
+import EditorAnuncios from './EditorAnuncios';
+import GestionCarreras from './GestionCarreras';
+import GestionAlumnos from './GestionAlumnos';
+import logoUPC from './assets/logo-sede-laboulaye.png';
+
+const anchoMenu = 250;
 
 export default function PanelAdmin() {
-return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: '#f1f5f9' }}>
-    
-      {/* Navbar Superior */}
-    <AppBar position="sticky" elevation={0} sx={{ backgroundColor: '#0f2c59', color: 'white' }}>
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
-        
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ bgcolor: '#dc2626', color: 'white', p: 0.5, px: 1, borderRadius: 1, fontWeight: 'bold', fontSize: '0.8rem' }}>
-                UPC
-            </Box>
-            <Typography variant="h6" sx={{ fontWeight: 'bold', letterSpacing: 1 }}>FOR UPC</Typography>
-            </Box>
-            <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(255,255,255,0.2)', my: 2 }} />
-            <Chip 
-            icon={<SecurityIcon style={{ color: '#fcd34d' }} fontSize="small" />} 
-            label="Modo Administrador" 
-            size="small" 
-            sx={{ bgcolor: 'rgba(245, 158, 11, 0.2)', color: '#fcd34d', border: '1px solid rgba(245, 158, 11, 0.4)', fontWeight: 'bold' }} 
+  const [vistaActiva, setVistaActiva] = useState('inicio');
+  const navigate = useNavigate();
+
+  const handleCerrarSesion = () => {
+    navigate('/');
+  };
+
+  // Variable que determina si mostramos el menú lateral
+  const mostrarMenu = vistaActiva !== 'inicio';
+
+  const menuItems = [
+    { id: 'inicio', label: 'Inicio', icon: <DashboardRoundedIcon fontSize="small" /> },
+    { id: 'editor', label: 'Publicar Anuncio', icon: <CampaignRoundedIcon fontSize="small" /> },
+    { id: 'carreras', label: 'Gestión de Carreras', icon: <SchoolRoundedIcon fontSize="small" /> },
+    { id: 'alumnos', label: 'Gestión de Alumnos', icon: <PeopleAltRoundedIcon fontSize="small" /> },
+  ];
+
+  return (
+    <Box sx={{ display: 'flex', backgroundColor: '#f8fafc', minHeight: '100vh' }}>
+      
+      {/* SIDEBAR / MENÚ LATERAL: Solo se renderiza si vistaActiva !== 'inicio' */}
+      {mostrarMenu && (
+        <Drawer
+          variant="permanent"
+          sx={{
+            width: anchoMenu,
+            flexShrink: 0,
+            '& .MuiDrawer-paper': {
+              width: anchoMenu,
+              boxSizing: 'border-box',
+              backgroundColor: '#ffffff',
+              borderRight: '1px solid #e2e8f0',
+            },
+          }}
+        >
+          <Box sx={{ p: 3, textAlign: 'center', borderBottom: '1px solid #e2e8f0', minHeight: 64, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <Box
+              component="img"
+              src={logoUPC}
+              alt="Logo UPC"
+              sx={{
+                height: 50,
+                width: 'auto',
+                maxWidth: '100%',
+                mx: 'auto',
+                mb: 1.2,
+                display: 'block',
+                objectFit: 'contain',
+              }}
             />
-        </Box>
+            <Typography
+              variant="subtitle2"
+              sx={{
+                color: '#0f172a',
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                fontSize: '0.75rem',
+              }}
+            >
+              Administración
+            </Typography>
+          </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Box sx={{ textAlign: 'right', display: { xs: 'none', md: 'block' } }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', lineHeight: 1 }}>Mag. Roberto Cárdenas</Typography>
-            <Typography variant="caption" sx={{ color: '#94a3b8' }}>Coordinación de Calidad Académica</Typography>
-            </Box>
-            <Avatar src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=80" sx={{ border: '1px solid #475569' }} />
-        </Box>
+          {/* LISTADO DE NAVEGACIÓN */}
+          <List sx={{ px: 1.5, py: 2 }}>
+            {menuItems.map((item) => {
+              const activo = vistaActiva === item.id;
+              return (
+                <ListItem key={item.id} disablePadding sx={{ mb: 0.5 }}>
+                  <ListItemButton
+                    onClick={() => setVistaActiva(item.id)}
+                    sx={{
+                      borderRadius: 2,
+                      py: 1.1,
+                      px: 1.75,
+                      bgcolor: activo ? '#fef3c7' : 'transparent',
+                      color: activo ? '#92400e' : '#475569',
+                      borderLeft: activo ? '3.5px solid #f7a600' : '3.5px solid transparent',
+                      '&:hover': {
+                        bgcolor: activo ? '#fde68a' : '#f1f5f9',
+                        color: activo ? '#78350f' : '#0f172a',
+                      },
+                    }}
+                  >
+                    <ListItemIcon
+                      sx={{
+                        minWidth: 36,
+                        color: activo ? '#f7a600' : '#64748b',
+                      }}
+                    >
+                      {item.icon}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={item.label}
+                      primaryTypographyProps={{
+                        fontSize: '0.88rem',
+                        fontWeight: activo ? 700 : 500,
+                      }}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              );
+            })}
+          </List>
+        </Drawer>
+      )}
 
-        </Toolbar>
-    </AppBar>
-
-      {/* Contenedor Principal: Sidebar + Contenido */}
-    <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
+      {/* ÁREA DE CONTENIDO + APPBAR SUPERIOR */}
+      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', width: mostrarMenu ? `calc(100% - ${anchoMenu}px)` : '100%' }}>
         
-        {/* Sidebar Lateral */}
-        <Box sx={{ width: 260, bgcolor: 'white', borderRight: '1px solid #e2e8f0', p: 2, display: { xs: 'none', md: 'flex' }, flexDirection: 'column' }}>
-        <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#94a3b8', mb: 2, px: 2 }}>GESTIÓN DE PLATAFORMA</Typography>
-        
-        <List sx={{ flexGrow: 1 }}>
-            <ListItem button sx={{ bgcolor: '#eff6ff', borderRadius: 2, mb: 1, color: '#1e3a8a' }}>
-            <ListItemIcon sx={{ minWidth: 40, color: '#1e3a8a' }}><DashboardIcon fontSize="small" /></ListItemIcon>
-            <ListItemText primary="Cartelera Oficial" primaryTypographyProps={{ fontWeight: 'bold', fontSize: '0.875rem' }} />
-            <Chip label="Activo" size="small" sx={{ height: 20, fontSize: '0.65rem', bgcolor: '#dbeafe', color: '#1e3a8a', fontWeight: 'bold' }} />
-            </ListItem>
+        {/* APPBAR SUPERIOR */}
+        <AppBar
+          position="sticky"
+          elevation={0}
+          sx={{
+            backgroundColor: '#ffffff',
+            borderBottom: '1px solid #e2e8f0',
+            color: '#0f172a',
+          }}
+        >
+          <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, minHeight: '82px !important' }}>
             
-            <ListItem button sx={{ borderRadius: 2, mb: 1, color: '#475569' }}>
-            <ListItemIcon sx={{ minWidth: 40 }}><ForumIcon fontSize="small" /></ListItemIcon>
-            <ListItemText primary="Foros y Categorías" primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 'medium' }} />
-            </ListItem>
-
-            <ListItem button sx={{ borderRadius: 2, mb: 1, color: '#475569' }}>
-            <ListItemIcon sx={{ minWidth: 40 }}><PeopleIcon fontSize="small" /></ListItemIcon>
-            <ListItemText primary="Usuarios" primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 'medium' }} />
-            </ListItem>
-
-            <ListItem button sx={{ borderRadius: 2, mb: 1, color: '#475569' }}>
-            <ListItemIcon sx={{ minWidth: 40 }}><SecurityIcon fontSize="small" /></ListItemIcon>
-            <ListItemText primary="Moderación" primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 'medium' }} />
-            <Badge badgeContent={3} color="error" />
-            </ListItem>
-        </List>
-        </Box>
-
-        {/* Área Central de Trabajo */}
-        <Box sx={{ flexGrow: 1, p: 4, overflowY: 'auto' }}>
-        
-          {/* Módulo de Cartelera */}
-        <Card sx={{ borderRadius: 4, mb: 4, boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)' }}>
-            <CardContent sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            {/* Perfil del Administrador (o Logo si está en inicio) */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              {!mostrarMenu && (
+                <Box
+                  component="img"
+                  src={logoUPC}
+                  alt="Logo UPC"
+                  sx={{ height: 50, width: 'auto', mr: 1 }}
+                />
+              )}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Avatar
+                  sx={{
+                    bgcolor: '#fffbeb',
+                    color: '#f7a600',
+                    border: '1px solid #fef3c7',
+                    width: 38,
+                    height: 38,
+                  }}
+                >
+                  <AdminPanelSettingsRoundedIcon sx={{ fontSize: 22 }} />
+                </Avatar>
                 <Box>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#0f172a' }}>Cartelera Oficial UPC</Typography>
-                <Typography variant="caption" sx={{ color: '#64748b' }}>Comunicados prioritarios visibles para todos los alumnos.</Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>
+                    Administrador General
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 500, display: 'block' }}>
+                    Sede Laboulaye • Gestión UPC
+                  </Typography>
                 </Box>
-                <Button variant="contained" startIcon={<AddIcon />} sx={{ bgcolor: '#f59e0b', '&:hover': { bgcolor: '#d97706' }, textTransform: 'none', fontWeight: 'bold', borderRadius: 2 }}>
-                Nuevo Anuncio
-                </Button>
+              </Box>
             </Box>
 
-            <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid #e2e8f0', borderRadius: 2 }}>
-                <Table size="small">
-                <TableHead sx={{ bgcolor: '#f8fafc' }}>
-                    <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#64748b' }}>Título</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#64748b' }}>Fecha</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#64748b' }}>Autor</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#64748b' }}>Alcance</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 'bold', color: '#64748b' }}>Acciones</TableCell>
-                    </TableRow>
-                </TableHead>
-                <TableBody>
-                    <TableRow hover>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#1e293b' }}>Inicio del Periodo de Matrícula 2026-II</TableCell>
-                    <TableCell sx={{ color: '#64748b' }}>14 Sep 2026</TableCell>
-                    <TableCell sx={{ color: '#334155' }}>Secretaría Académica</TableCell>
-                    <TableCell><Chip label="Todos los Campus" size="small" sx={{ bgcolor: '#d1fae5', color: '#065f46', fontWeight: 'bold', fontSize: '0.65rem' }} /></TableCell>
-                    <TableCell align="right">
-                        <IconButton size="small" sx={{ color: '#94a3b8' }}><EditIcon fontSize="small" /></IconButton>
-                        <IconButton size="small" sx={{ color: '#ef4444' }}><DeleteIcon fontSize="small" /></IconButton>
-                    </TableCell>
-                    </TableRow>
-                </TableBody>
-                </Table>
-            </TableContainer>
-            </CardContent>
-        </Card>
+            {/* Botón Cerrar Sesión */}
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<LogoutRoundedIcon />}
+              onClick={handleCerrarSesion}
+              sx={{
+                color: '#475569',
+                borderColor: '#cbd5e1',
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '0.82rem',
+                borderRadius: 2,
+                px: 1.75,
+                py: 0.6,
+                '&:hover': {
+                  borderColor: '#94a3b8',
+                  bgcolor: '#f1f5f9',
+                },
+              }}
+            >
+              Cerrar Sesión
+            </Button>
+          </Toolbar>
+        </AppBar>
 
-          {/* Módulo de Moderación */}
-        <Card sx={{ borderRadius: 4, boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)' }}>
-            <CardContent sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#0f172a' }}>Panel de Moderación</Typography>
-                <Chip label="3 pendientes" size="small" sx={{ bgcolor: '#fee2e2', color: '#b91c1c', fontWeight: 'bold' }} />
+        {/* CONTENIDO PRINCIPAL */}
+        <Box component="main" sx={{ flexGrow: 1, p: { xs: 3, md: 5 } }}>
+          {vistaActiva === 'inicio' && (
+            <Box>
+              <Box sx={{ mb: 4, textAlign: 'center' }}>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    color: '#0f172a',
+                    fontWeight: 700,
+                    letterSpacing: '-0.02em',
+                    mb: 1,
+                  }}
+                >
+                  Panel de Administración
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#64748b' }}>
+                  Selecciona una sección para gestionar la información académica y los comunicados
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, flexWrap: 'wrap' }}>
+                {/* Tarjeta 1: Publicar Anuncio */}
+                <Card
+                  sx={{
+                    width: 270,
+                    borderRadius: 2.5,
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.05)',
+                    backgroundColor: '#ffffff',
+                    transition: 'all 0.2s ease-in-out',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      boxShadow: '0 8px 20px -4px rgb(0 0 0 / 0.08)',
+                      borderColor: '#f7a600',
+                    },
+                  }}
+                >
+                  <CardActionArea onClick={() => setVistaActiva('editor')} sx={{ p: 2, height: '100%' }}>
+                    <CardContent sx={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
+                      <Box
+                        sx={{
+                          width: 58,
+                          height: 58,
+                          borderRadius: '50%',
+                          backgroundColor: '#fffbeb',
+                          border: '1px solid #fef3c7',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          mb: 2,
+                        }}
+                      >
+                        <CampaignRoundedIcon sx={{ fontSize: 30, color: '#f7a600' }} />
+                      </Box>
+                      <Typography variant="h6" sx={{ color: '#0f172a', fontWeight: 700, fontSize: '1.05rem', mb: 0.5 }}>
+                        Publicar Anuncio
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#64748b', fontSize: '0.85rem' }}>
+                        Crear y enviar notificaciones
+                      </Typography>
+                    </CardContent>
+                  </CardActionArea>
+                </Card>
+
+                {/* Tarjeta 2: Gestión de Carreras */}
+                <Card
+                  sx={{
+                    width: 270,
+                    borderRadius: 2.5,
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.05)',
+                    backgroundColor: '#ffffff',
+                    transition: 'all 0.2s ease-in-out',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      boxShadow: '0 8px 20px -4px rgb(0 0 0 / 0.08)',
+                      borderColor: '#f7a600',
+                    },
+                  }}
+                >
+                  <CardActionArea onClick={() => setVistaActiva('carreras')} sx={{ p: 2, height: '100%' }}>
+                    <CardContent sx={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
+                      <Box
+                        sx={{
+                          width: 58,
+                          height: 58,
+                          borderRadius: '50%',
+                          backgroundColor: '#fffbeb',
+                          border: '1px solid #fef3c7',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          mb: 2,
+                        }}
+                      >
+                        <SchoolRoundedIcon sx={{ fontSize: 30, color: '#f7a600' }} />
+                      </Box>
+                      <Typography variant="h6" sx={{ color: '#0f172a', fontWeight: 700, fontSize: '1.05rem', mb: 0.5 }}>
+                        Gestión de Carreras
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#64748b', fontSize: '0.85rem' }}>
+                        Administrar carreras y años
+                      </Typography>
+                    </CardContent>
+                  </CardActionArea>
+                </Card>
+
+                {/* Tarjeta 3: Gestión de Alumnos */}
+                <Card
+                  sx={{
+                    width: 270,
+                    borderRadius: 2.5,
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.05)',
+                    backgroundColor: '#ffffff',
+                    transition: 'all 0.2s ease-in-out',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      boxShadow: '0 8px 20px -4px rgb(0 0 0 / 0.08)',
+                      borderColor: '#f7a600',
+                    },
+                  }}
+                >
+                  <CardActionArea onClick={() => setVistaActiva('alumnos')} sx={{ p: 2, height: '100%' }}>
+                    <CardContent sx={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
+                      <Box
+                        sx={{
+                          width: 58,
+                          height: 58,
+                          borderRadius: '50%',
+                          backgroundColor: '#fffbeb',
+                          border: '1px solid #fef3c7',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          mb: 2,
+                        }}
+                      >
+                        <PeopleAltRoundedIcon sx={{ fontSize: 30, color: '#f7a600' }} />
+                      </Box>
+                      <Typography variant="h6" sx={{ color: '#0f172a', fontWeight: 700, fontSize: '1.05rem', mb: 0.5 }}>
+                        Gestión de Alumnos
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#64748b', fontSize: '0.85rem' }}>
+                        Ver y editar alumnos
+                      </Typography>
+                    </CardContent>
+                  </CardActionArea>
+                </Card>
+              </Box>
             </Box>
-            <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mb: 3 }}>Mensajes marcados por la comunidad que requieren revisión.</Typography>
+          )}
 
-            <Box sx={{ border: '1px solid #e2e8f0', bgcolor: '#f8fafc', borderRadius: 3, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Box>
-                <Chip label="Posible Spam" size="small" sx={{ bgcolor: '#ffe4e6', color: '#9f1239', height: 20, fontSize: '0.65rem', fontWeight: 'bold', mb: 1 }} />
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#0f172a' }}>"Vendo solucionario del parcial de Finanzas 2026-I a 20 soles al DM"</Typography>
-                <Typography variant="caption" sx={{ color: '#64748b' }}>Publicado por @alumno_anon92 en Foro General</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button variant="outlined" startIcon={<CheckCircleIcon />} size="small" sx={{ color: '#059669', borderColor: '#cbd5e1', bgcolor: 'white', textTransform: 'none' }}>
-                    Aprobar
-                </Button>
-                <Button variant="contained" startIcon={<DeleteIcon />} size="small" sx={{ bgcolor: '#dc2626', '&:hover': { bgcolor: '#b91c1c' }, textTransform: 'none' }}>
-                    Eliminar
-                </Button>
-                </Box>
-            </Box>
-            </CardContent>
-        </Card>
-
+          {vistaActiva === 'editor' && <EditorAnuncios />}
+          {vistaActiva === 'carreras' && <GestionCarreras />}
+          {vistaActiva === 'alumnos' && <GestionAlumnos />}
         </Box>
+      </Box>
     </Box>
-    </Box>
-);
+  );
 }
