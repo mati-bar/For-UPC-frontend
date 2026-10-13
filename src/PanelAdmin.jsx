@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Drawer,
@@ -15,6 +15,7 @@ import {
   Toolbar,
   Button,
   Avatar,
+  CircularProgress,
 } from '@mui/material';
 import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
 import CampaignRoundedIcon from '@mui/icons-material/CampaignRounded';
@@ -24,6 +25,7 @@ import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import AdminPanelSettingsRoundedIcon from '@mui/icons-material/AdminPanelSettingsRounded';
 import { useNavigate } from 'react-router-dom';
 
+import api from './api/axiosConfig';
 import EditorAnuncios from './EditorAnuncios';
 import GestionCarreras from './GestionCarreras';
 import GestionAlumnos from './GestionAlumnos';
@@ -33,13 +35,47 @@ const anchoMenu = 250;
 
 export default function PanelAdmin() {
   const [vistaActiva, setVistaActiva] = useState('inicio');
+  const [admin, setAdmin] = useState({
+    nombre: 'Cargando...',
+    rol: '',
+    sede: '',
+  });
+  const [cargandoPerfil, setCargandoPerfil] = useState(true);
   const navigate = useNavigate();
 
-  const handleCerrarSesion = () => {
-    navigate('/');
+  // 1. Obtener la información del administrador autenticado desde el backend
+  useEffect(() => {
+    const fetchPerfil = async () => {
+      try {
+        const { data } = await api.get('/auth/perfil');
+        setAdmin({
+          nombre: data.nombre || 'Administrador General',
+          rol: data.rol || 'Gestión UPC',
+          sede: data.sede || 'Sede Laboulaye',
+        });
+      } catch (err) {
+        console.error('Error al obtener perfil:', err);
+      } finally {
+        setCargandoPerfil(false);
+      }
+    };
+
+    fetchPerfil();
+  }, []);
+
+  // 2. Cerrar sesión contra el backend y limpiar el almacenamiento local
+  const handleCerrarSesion = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (err) {
+      console.warn('Error durante el cierre de sesión en backend:', err);
+    } finally {
+      localStorage.removeItem('token');
+      localStorage.removeItem('adminUser');
+      navigate('/');
+    }
   };
 
-  // Variable que determina si mostramos el menú lateral
   const mostrarMenu = vistaActiva !== 'inicio';
 
   const menuItems = [
@@ -67,7 +103,17 @@ export default function PanelAdmin() {
             },
           }}
         >
-          <Box sx={{ p: 3, textAlign: 'center', borderBottom: '1px solid #e2e8f0', minHeight: 64, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <Box
+            sx={{
+              p: 3,
+              textAlign: 'center',
+              borderBottom: '1px solid #e2e8f0',
+              minHeight: 64,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+            }}
+          >
             <Box
               component="img"
               src={logoUPC}
@@ -141,8 +187,14 @@ export default function PanelAdmin() {
       )}
 
       {/* ÁREA DE CONTENIDO + APPBAR SUPERIOR */}
-      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', width: mostrarMenu ? `calc(100% - ${anchoMenu}px)` : '100%' }}>
-        
+      <Box
+        sx={{
+          flexGrow: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          width: mostrarMenu ? `calc(100% - ${anchoMenu}px)` : '100%',
+        }}
+      >
         {/* APPBAR SUPERIOR */}
         <AppBar
           position="sticky"
@@ -154,7 +206,6 @@ export default function PanelAdmin() {
           }}
         >
           <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, minHeight: '82px !important' }}>
-            
             {/* Perfil del Administrador (o Logo si está en inicio) */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               {!mostrarMenu && (
@@ -179,10 +230,14 @@ export default function PanelAdmin() {
                 </Avatar>
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>
-                    Administrador General
+                    {cargandoPerfil ? (
+                      <CircularProgress size={14} sx={{ color: '#f7a600', verticalAlign: 'middle' }} />
+                    ) : (
+                      admin.nombre
+                    )}
                   </Typography>
                   <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 500, display: 'block' }}>
-                    Sede Laboulaye • Gestión UPC
+                    {admin.sede} • {admin.rol}
                   </Typography>
                 </Box>
               </Box>

@@ -2,71 +2,81 @@ import React, { useState, useEffect } from 'react';
 import { 
   Box, Typography, Button, Paper, Table, TableBody, TableCell, 
   TableContainer, TableHead, TableRow, Card, CardContent, 
-  TextField, FormControl, InputLabel, Select, MenuItem 
+  TextField, FormControl, InputLabel, Select, MenuItem,
+  CircularProgress, Alert 
 } from '@mui/material';
+import api from './api/axiosConfig'; // Asegúrate de ajustar la ruta relativa a tu axiosConfig
 
 export default function GestionCarreras() {
-  // 1. Estados para manejar los datos reales y el formulario
+  // 1. Estados de datos y formulario
   const [carreras, setCarreras] = useState([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [nombre, setNombre] = useState('');
   const [cantidadAnios, setCantidadAnios] = useState(3);
 
-  // 2. Traer las carreras del backend al cargar la pantalla
-  useEffect(() => {
-    fetch('http://localhost:8080/carreras')
-      .then(respuesta => respuesta.json())
-      .then(datos => setCarreras(datos))
-      .catch(error => console.error("Error al cargar carreras:", error));
-  }, []);
+  // Estados de control de UI
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [errorMsg, setErrorMsg] = useState(null);
 
-  // 3. Función para enviar la nueva carrera al backend
-  const handleCrearCarrera = async (e) => {
-    e.preventDefault();
-    
-    const nuevaCarrera = {
-      nombre: nombre,
-      cantidadAnios: cantidadAnios
-    };
-
+  // 2. Traer las carreras del backend al montar el componente
+  const cargarCarreras = async () => {
     try {
-      const respuesta = await fetch('http://localhost:8080/carreras', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(nuevaCarrera)
-      });
-
-      if (respuesta.ok) {
-        const carreraGuardada = await respuesta.json();
-        setCarreras([...carreras, carreraGuardada]); // Actualizamos la tabla
-        setNombre(''); // Limpiamos el form
-        setCantidadAnios(3);
-        setMostrarFormulario(false); // Cerramos el form
-      } else {
-        const mensajeError = await respuesta.text();
-        alert("Atención: " + mensajeError);
-      }
+      setCargando(true);
+      setErrorMsg(null);
+      const res = await api.get('/carreras');
+      setCarreras(res.data);
     } catch (error) {
-      console.error("Error de conexión al crear carrera:", error);
+      console.error('Error al cargar carreras:', error);
+      setErrorMsg('No se pudieron obtener las carreras. Verifica la conexión con el servidor.');
+    } finally {
+      setCargando(false);
     }
   };
 
-  // 4. Función para eliminar la carrera en la base de datos
-  const handleEliminar = async (id) => {
-    if (!window.confirm("¿Estás seguro de que querés eliminar esta carrera y todos sus años vinculados?")) return;
+  useEffect(() => {
+    cargarCarreras();
+  }, []);
+
+  // 3. Crear una nueva carrera en el backend
+  const handleCrearCarrera = async (e) => {
+    e.preventDefault();
+    setGuardando(true);
+    setErrorMsg(null);
+
+    const nuevaCarrera = {
+      nombre: nombre.trim(),
+      cantidadAnios: Number(cantidadAnios),
+    };
 
     try {
-      const respuesta = await fetch(`http://localhost:8080/carreras/${id}`, {
-        method: 'DELETE'
-      });
-
-      if (respuesta.ok) {
-        setCarreras(carreras.filter(c => c.id !== id)); // La sacamos de la tabla
-      } else {
-        alert("Error al intentar eliminar la carrera del servidor.");
-      }
+      const res = await api.post('/carreras', nuevaCarrera);
+      setCarreras((prev) => [...prev, res.data]);
+      setNombre('');
+      setCantidadAnios(3);
+      setMostrarFormulario(false);
     } catch (error) {
-      console.error("Error al eliminar:", error);
+      console.error('Error al crear carrera:', error);
+      const mensaje = error.response?.data?.mensaje || error.response?.data || 'Error al guardar la carrera.';
+      alert('Atención: ' + (typeof mensaje === 'string' ? mensaje : JSON.stringify(mensaje)));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  // 4. Eliminar carrera en la base de datos
+  const handleEliminar = async (id) => {
+    if (!window.confirm('¿Estás seguro de que querés eliminar esta carrera y todos sus años vinculados?')) {
+      return;
+    }
+
+    try {
+      await api.delete(`/carreras/${id}`);
+      setCarreras((prev) => prev.filter((c) => c.id !== id));
+    } catch (error) {
+      console.error('Error al eliminar:', error);
+      const mensaje = error.response?.data?.mensaje || 'Error al intentar eliminar la carrera del servidor.';
+      alert(mensaje);
     }
   };
 
@@ -79,21 +89,29 @@ export default function GestionCarreras() {
         
         {/* Botón dinámico que abre/cierra el formulario */}
         <Button 
-          variant={mostrarFormulario ? "outlined" : "contained"} 
+          variant={mostrarFormulario ? 'outlined' : 'contained'} 
           onClick={() => setMostrarFormulario(!mostrarFormulario)}
           sx={{ 
             bgcolor: mostrarFormulario ? 'transparent' : '#f7a600', 
             color: mostrarFormulario ? '#64748b' : '#fff',
             borderColor: mostrarFormulario ? '#cbd5e1' : 'transparent',
             '&:hover': { bgcolor: mostrarFormulario ? '#f1f5f9' : '#bc7e01' }, 
-            fontWeight: 'bold' 
+            fontWeight: 'bold',
+            textTransform: 'none'
           }}
         >
           {mostrarFormulario ? 'Cancelar' : '+ Agregar Nueva Carrera'}
         </Button>
       </Box>
 
-      {/* Formulario que se despliega al apretar el botón */}
+      {/* Alerta de error si falla la carga */}
+      {errorMsg && (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setErrorMsg(null)}>
+          {errorMsg}
+        </Alert>
+      )}
+
+      {/* Formulario desplegable */}
       {mostrarFormulario && (
         <Card sx={{ mb: 4, borderRadius: 2, border: '2px solid #f7a600', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}>
           <CardContent sx={{ p: 3 }}>
@@ -105,11 +123,11 @@ export default function GestionCarreras() {
               <TextField 
                 label="Nombre de la Carrera" 
                 required 
-                fullWidth 
                 size="small"
                 sx={{ flexGrow: 1, minWidth: '300px' }} 
                 value={nombre} 
                 onChange={(e) => setNombre(e.target.value)} 
+                disabled={guardando}
               />
               
               <FormControl size="small" sx={{ minWidth: '150px' }}>
@@ -118,16 +136,30 @@ export default function GestionCarreras() {
                   value={cantidadAnios} 
                   label="Duración (Años)"
                   onChange={(e) => setCantidadAnios(e.target.value)}
+                  disabled={guardando}
                 >
                   <MenuItem value={1}>1 Año</MenuItem>
                   <MenuItem value={2}>2 Años</MenuItem>
                   <MenuItem value={3}>3 Años</MenuItem>
                   <MenuItem value={4}>4 Años</MenuItem>
+                  <MenuItem value={5}>5 Años</MenuItem>
                 </Select>
               </FormControl>
 
-              <Button type="submit" variant="contained" sx={{ bgcolor: '#f7a600', '&:hover': { bgcolor: '#bc7e01' }, color: '#fff', fontWeight: 'bold', height: '40px' }}>
-                Guardar Carrera
+              <Button 
+                type="submit" 
+                variant="contained" 
+                disabled={guardando}
+                sx={{ 
+                  bgcolor: '#f7a600', 
+                  '&:hover': { bgcolor: '#bc7e01' }, 
+                  color: '#fff', 
+                  fontWeight: 'bold', 
+                  height: '40px',
+                  textTransform: 'none'
+                }}
+              >
+                {guardando ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : 'Guardar Carrera'}
               </Button>
 
             </Box>
@@ -135,18 +167,24 @@ export default function GestionCarreras() {
         </Card>
       )}
 
-      {/* Tabla con la lista real de carreras y funcionalidad en los botones */}
+      {/* Tabla de carreras */}
       <TableContainer component={Paper} sx={{ boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', borderRadius: 2 }}>
         <Table>
           <TableHead sx={{ bgcolor: '#f1f5f9' }}>
             <TableRow>
-              <TableCell sx={{ fontWeight: 'bold', color: '#0B1E3B' }}>ID</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', color: '#0B1E3B', width: '10%' }}>ID</TableCell>
               <TableCell sx={{ fontWeight: 'bold', color: '#0B1E3B' }}>Nombre de la Carrera</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: 'right', color: '#0B1E3B' }}>Acciones</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: 'right', color: '#0B1E3B', width: '20%' }}>Acciones</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {carreras.length === 0 ? (
+            {cargando ? (
+              <TableRow>
+                <TableCell colSpan={3} sx={{ textAlign: 'center', py: 4 }}>
+                  <CircularProgress size={30} sx={{ color: '#f7a600' }} />
+                </TableCell>
+              </TableRow>
+            ) : carreras.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={3} sx={{ textAlign: 'center', py: 3, color: '#64748b' }}>
                   No hay carreras registradas.
@@ -154,7 +192,7 @@ export default function GestionCarreras() {
               </TableRow>
             ) : (
               carreras.map((carrera) => (
-                <TableRow key={carrera.id}>
+                <TableRow key={carrera.id} hover>
                   <TableCell>{carrera.id}</TableCell>
                   <TableCell>{carrera.nombre}</TableCell>
                   <TableCell sx={{ textAlign: 'right' }}>
@@ -162,7 +200,7 @@ export default function GestionCarreras() {
                       variant="outlined" 
                       color="error" 
                       size="small" 
-                      sx={{ fontWeight: 'bold' }}
+                      sx={{ fontWeight: 'bold', textTransform: 'none' }}
                       onClick={() => handleEliminar(carrera.id)}
                     >
                       Eliminar
