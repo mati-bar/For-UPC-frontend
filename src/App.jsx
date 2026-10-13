@@ -8,13 +8,13 @@ import FeedEstudiante from './FeedEstudiante';
 export default function App() {
   return (
     <AuthProvider>
-      <Router>
+     
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/admin" element={<PanelAdmin />} />
           <Route path="/feed" element={<FeedEstudiante />} />
         </Routes>
-      </Router>
+    
     </AuthProvider>
   );
 }
