@@ -1,15 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Box, Card, CardContent, Typography, TextField, Button, 
   Tabs, Tab, Container, MenuItem, FormControl, InputLabel, Select,
-  Checkbox, ListItemText, OutlinedInput, Alert
+  Alert, IconButton
 } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from './context/AuthContext'; 
 import logoUPC from './assets/logo-sede-laboulaye.png';
 
-// Tema personalizado con naranja institucional
 const orangeTheme = createTheme({
   palette: {
     primary: {
@@ -22,65 +21,106 @@ const orangeTheme = createTheme({
 export default function Login() {
   const [tabValue, setTabValue] = useState(0);
   const [error, setError] = useState('');
+  const [exito, setExito] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { login, register } = useAuth(); 
 
+  // Estados de Login
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+
+  // Estados de Registro
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
-  const [correo, setCorreo] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [carreras, setCarreras] = useState([]);
-  const [anios, setAnios] = useState({});
-  const [lista, setLista] = useState([]);
 
-  const opcionesCarreras = [
-    "Tecnicatura Universitaria en Programación Full Stack",
-    "Profesorado Universitario de Biología",
-    "Profesorado Universitario de Geografía",
-    "Profesorado de Educación Secundaria en Historia",
-    "Profesorado de Educación Secundaria en Matemática",
-    "Prof. Educación Física",
-  ];
+  // Estados para los catálogos dinámicos
+  const [listaCarreras, setListaCarreras] = useState([]);
+  
+  // Estado para manejar las filas de inscripción: [{ carreraId: '', anioCarreraId: '', aniosDisponibles: [] }]
+  const [selecciones, setSelecciones] = useState([
+    { carreraId: '', anioCarreraId: '', aniosDisponibles: [] }
+  ]);
+
+  // Cargar las carreras al iniciar la pantalla
+  useEffect(() => {
+    fetch('http://localhost:8080/carreras')
+      .then(res => res.json())
+      .then(data => setListaCarreras(data))
+      .catch(err => console.error("Error al cargar carreras:", err));
+  }, []);
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
     setError('');
+    setExito('');
   };
 
-  const handleCarrerasChange = (event) => {
-    const { target: { value } } = event;
-    setCarreras(typeof value === 'string' ? value.split(',') : value);
+  // Manejador dinámico para cuando el estudiante elige una carrera en una fila específica
+  const handleCarreraChange = async (index, newCarreraId) => {
+    const nuevasSelecciones = [...selecciones];
+    // Limpiamos el año previo y actualizamos la carrera
+    nuevasSelecciones[index].carreraId = newCarreraId;
+    nuevasSelecciones[index].anioCarreraId = '';
+    nuevasSelecciones[index].aniosDisponibles = [];
+    setSelecciones(nuevasSelecciones);
+
+    if (newCarreraId) {
+      try {
+        const respuesta = await fetch(`http://localhost:8080/carreras/${newCarreraId}/anios`);
+        if (respuesta.ok) {
+          const aniosData = await respuesta.json();
+          const actualizadas = [...selecciones];
+          actualizadas[index].aniosDisponibles = aniosData;
+          setSelecciones(actualizadas);
+        }
+      } catch (error) {
+        console.error("Error al cargar los años:", error);
+      }
+    }
   };
 
-  const handleAnioChange = (carrera, event) => {
-    const { target: { value } } = event;
-    setAnios({ 
-      ...anios, 
-      [carrera]: typeof value === 'string' ? value.split(',') : value 
-    });
-    
-    var inscripcion = { "anioId": typeof value === 'string' ? value.split(',') : value, "carreraId": carrera };
-    setLista({ ...lista, inscripcion });
+  const handleAnioChange = (index, newAnioCarreraId) => {
+    const nuevasSelecciones = [...selecciones];
+    nuevasSelecciones[index].anioCarreraId = newAnioCarreraId;
+    setSelecciones(nuevasSelecciones);
+  };
+
+  const agregarFila = () => {
+    setSelecciones([...selecciones, { carreraId: '', anioCarreraId: '', aniosDisponibles: [] }]);
+  };
+
+  const eliminarFila = (index) => {
+    if (selecciones.length > 1) {
+      const nuevasSelecciones = selecciones.filter((_, i) => i !== index);
+      setSelecciones(nuevasSelecciones);
+    }
   };
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const nuevoUsuario = { loginEmail, loginPassword };
 
     try {
-      await api.post('/auth/registro', nuevoUsuario); 
-      if (isAdmin) {
-        navigate('/admin');
+      const respuesta = await fetch('http://localhost:8080/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword })
+      });
+
+      if (respuesta.ok) {
+        const data = await respuesta.json();
+        // Guardamos el token para que Matías lo use después en los permisos
+        localStorage.setItem('token', data.token);
+        navigate('/feed'); 
       } else {
-        navigate('/feed');
+        const mensajeError = await respuesta.text();
+        setError(mensajeError || 'Email o contraseña incorrectos.');
       }
     } catch (err) {
-      setError(err.message || 'Error al iniciar sesión. Revisa tus credenciales.');
+      setError('Error de conexión con el servidor.');
     } finally {
       setLoading(false);
     }
@@ -88,8 +128,50 @@ export default function Login() {
 
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
-    var inscripciones = lista?.inscripcion;
-    console.log('Datos de registro:', { nombre, apellido, correo, password, inscripciones });
+    setError('');
+    setExito('');
+    setLoading(true);
+
+    // Filtramos solo las selecciones que estén completas (carrera y año) y armamos el formato exacto para el backend
+    const inscripcionesValidas = selecciones
+      .filter(s => s.carreraId && s.anioCarreraId)
+      .map(s => ({ anioCarreraId: s.anioCarreraId }));
+
+    if (inscripcionesValidas.length === 0) {
+      setError('Debes completar al menos una carrera y su año correspondiente.');
+      setLoading(false);
+      return;
+    }
+
+    const payload = {
+      nombre,
+      apellido,
+      email,
+      password,
+      inscripciones: inscripcionesValidas
+    };
+
+    try {
+      const respuesta = await fetch('http://localhost:8080/auth/registro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (respuesta.status === 201) {
+        setExito('¡Registro exitoso! Ya podés iniciar sesión.');
+        setTabValue(0); // Lo mandamos al login para que entre
+        setNombre(''); setApellido(''); setEmail(''); setPassword('');
+        setSelecciones([{ carreraId: '', anioCarreraId: '', aniosDisponibles: [] }]);
+      } else {
+        const mensajeError = await respuesta.text();
+        setError(mensajeError);
+      }
+    } catch (err) {
+      setError('Error de conexión al registrarse.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -119,6 +201,7 @@ export default function Login() {
 
             <CardContent sx={{ p: 4 }}>
               {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+              {exito && <Alert severity="success" sx={{ mb: 2 }}>{exito}</Alert>}
               
               {tabValue === 0 && (
                 <Box component="form" onSubmit={handleLoginSubmit} sx={{ color: '#000000', display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -138,34 +221,52 @@ export default function Login() {
                 <Box component="form" onSubmit={handleRegisterSubmit} sx={{ display: 'flex', flexDirection: 'column' }}>
                   <TextField label="Nombre" fullWidth required size="small" sx={{ mb: 2 }} value={nombre} onChange={(e) => setNombre(e.target.value)} />
                   <TextField label="Apellido" fullWidth required size="small" sx={{ mb: 2 }} value={apellido} onChange={(e) => setApellido(e.target.value)} />
-                  <TextField label="Correo Electrónico" type="email" fullWidth required size="small" sx={{ mb: 2 }} value={correo} onChange={(e) => setCorreo(e.target.value)} />
+                  <TextField label="Correo Electrónico" type="email" fullWidth required size="small" sx={{ mb: 2 }} value={email} onChange={(e) => setEmail(e.target.value)} />
                   <TextField label="Contraseña" type="password" fullWidth required size="small" sx={{ mb: 3 }} value={password} onChange={(e) => setPassword(e.target.value)} />
                   
-                  <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                    <InputLabel>Carreras</InputLabel>
-                    <Select multiple value={carreras} onChange={handleCarrerasChange} input={<OutlinedInput label="Carreras" />} renderValue={(selected) => selected.join(', ')}>
-                      {opcionesCarreras.map((carrera) => (
-                        <MenuItem key={carrera} value={carrera}>
-                          <Checkbox checked={carreras.indexOf(carrera) > -1} />
-                          <ListItemText primary={carrera} />
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1.5, color: '#000' }}>Seleccioná tus carreras en curso:</Typography>
+                  
+                  {selecciones.map((seleccion, index) => (
+                    <Box key={index} sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'flex-start' }}>
+                      <FormControl fullWidth size="small" required>
+                        <InputLabel>Carrera</InputLabel>
+                        <Select
+                          value={seleccion.carreraId}
+                          label="Carrera"
+                          onChange={(e) => handleCarreraChange(index, e.target.value)}
+                        >
+                          {listaCarreras.map((c) => (
+                            <MenuItem key={c.id} value={c.id} disabled={selecciones.some(s => s.carreraId === c.id && s !== seleccion)}>
+                              {c.nombre}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
 
-                  {carreras.map((carrera) => (
-                    <FormControl fullWidth size="small" sx={{ mb: 2 }} key={carrera}>
-                      <InputLabel>Año/s que cursás - {carrera}</InputLabel>
-                      <Select multiple value={anios[carrera] || []} onChange={(e) => handleAnioChange(carrera, e)} input={<OutlinedInput label={`Año/s que cursás - ${carrera}`} />} renderValue={(selected) => selected.join(', ')}>
-                        {['1er Año', '2do Año', '3er Año', '4to Año'].map((anio) => (
-                          <MenuItem key={anio} value={anio}>
-                            <Checkbox checked={(anios[carrera] || []).indexOf(anio) > -1} />
-                            <ListItemText primary={anio} />
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                      <FormControl fullWidth size="small" required disabled={!seleccion.carreraId || seleccion.aniosDisponibles.length === 0}>
+                        <InputLabel>Año</InputLabel>
+                        <Select
+                          value={seleccion.anioCarreraId}
+                          label="Año"
+                          onChange={(e) => handleAnioChange(index, e.target.value)}
+                        >
+                          {seleccion.aniosDisponibles.map((a) => (
+                            <MenuItem key={a.anioCarreraId} value={a.anioCarreraId}>
+                              {a.numero}° Año
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+
+                      <IconButton color="error" onClick={() => eliminarFila(index)} disabled={selecciones.length === 1}>
+                        <DeleteIcon />
+                      </IconButton>
+                    </Box>
                   ))}
+
+                  <Button onClick={agregarFila} sx={{ alignSelf: 'flex-start', mb: 3, textTransform: 'none', fontWeight: 'bold', color: '#f7a600' }}>
+                  + Añadir otra carrera
+                  </Button>
 
                   <Button type="submit" disabled={loading} variant="contained" size="large" sx={{ bgcolor: '#f7a600', '&:hover': { bgcolor: '#bc7e01' }, py: 1.5, fontWeight: 'bold', color: '#ffffff' }}>
                     {loading ? 'Registrando...' : 'Completar Registro'}
