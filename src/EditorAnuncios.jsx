@@ -56,6 +56,7 @@ export default function EditorAnuncios() {
     }
 
   };
+  }
   
   const handleEliminarArchivo = () => { setArchivo(null); };
 
@@ -77,7 +78,7 @@ export default function EditorAnuncios() {
   };
   
   const handlePublicar = (e) => { 
-    e.preventDefault(); 
+    //e.preventDefault(); 
     
     if (idEdicion) {
       const feedActualizado = anunciosFeed.map(anuncio => 
@@ -90,13 +91,15 @@ export default function EditorAnuncios() {
       const nuevoAnuncio = {
         id: Date.now(),
         titulo: titulo,
-        contenido: contenido,
-        fecha: 'Ahora mismo',
-        destino: esGeneral ? 'General (Todas las carreras)' : 'Carreras Específicas',
+        mensaje: contenido,
+        carreraId: 1, // se cambia con backend
+        anioId: 1, // se cambia con backend
         urgente: esUrgente,
         duracion: duracion // Se suma al objeto final
         
       };
+
+      console.log('Nuevo anuncio a publicar:', nuevoAnuncio);
 
     try {
       const formData = new FormData();
@@ -111,9 +114,13 @@ export default function EditorAnuncios() {
 
       formData.append('datos', JSON.stringify(nuevoAnuncio));
 
+      
       const respuesta = fetch('http://localhost:8080/publicaciones', {
         method: 'POST',
-        body: formData
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
       });
 
       if (respuesta.status === 201) {
@@ -125,14 +132,16 @@ export default function EditorAnuncios() {
         const mensajeError = respuesta.text();
         setError(mensajeError);
       }
+    
+      setAnunciosFeed([nuevoAnuncio, ...anunciosFeed]);
+
     } catch (err) {
       setError('Error al publicar el anuncio.');
     } finally {
-      setLoading(false);
+      //setLoading(false);
     } 
     };
-}
-      setAnunciosFeed([nuevoAnuncio, ...anunciosFeed]);
+
     
     resetFormulario();
   };
