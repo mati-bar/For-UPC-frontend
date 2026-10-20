@@ -14,6 +14,7 @@ export default function EditorAnuncios() {
   const [titulo, setTitulo] = useState('');
   const [contenido, setContenido] = useState('');
   const [archivo, setArchivo] = useState(null);
+  const [imagen, setImagen] = useState(null);
   const [esUrgente, setEsUrgente] = useState(false);
   const [esGeneral, setEsGeneral] = useState(true); 
   const [carrerasDestino, setCarrerasDestino] = useState([]); 
@@ -46,7 +47,14 @@ export default function EditorAnuncios() {
   ]);
 
   const handleArchivoChange = (e) => { 
-    if (e.target.files && e.target.files[0]) setArchivo(e.target.files[0]); 
+    console.log('Archivo seleccionado:', e.target.files[0]);
+    if (e.target.files && e.target.files[0]) {
+      if (e.target.files[0].type.startsWith('image/')) {
+      setImagen(e.target.files[0]); 
+    } else {
+      setArchivo(e.target.files[0]); 
+    }
+
   };
   
   const handleEliminarArchivo = () => { setArchivo(null); };
@@ -87,9 +95,45 @@ export default function EditorAnuncios() {
         destino: esGeneral ? 'General (Todas las carreras)' : 'Carreras Específicas',
         urgente: esUrgente,
         duracion: duracion // Se suma al objeto final
+        
       };
+
+    try {
+      const formData = new FormData();
+
+      if (archivo) {
+        // 'archivo' o 'file' según cómo lo reciba tu backend (ej: @RequestParam("archivo") o req.file)
+        formData.append('archivo', archivo);
+      } else {
+        // 'archivo' o 'file' según cómo lo reciba tu backend (ej: @RequestParam("archivo") o req.file)
+        formData.append('imagen', imagen);
+      }
+
+      formData.append('datos', JSON.stringify(nuevoAnuncio));
+
+      const respuesta = fetch('http://localhost:8080/publicaciones', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (respuesta.status === 201) {
+        setExito('¡Publicación exitosa!');
+        setTabValue(0); // Lo mandamos al login para que entre
+        setNombre(''); setApellido(''); setEmail(''); setPassword('');
+        setSelecciones([{ carreraId: '', anioCarreraId: '', aniosDisponibles: [] }]);
+      } else {
+        const mensajeError = respuesta.text();
+        setError(mensajeError);
+      }
+    } catch (err) {
+      setError('Error al publicar el anuncio.');
+    } finally {
+      setLoading(false);
+    } 
+    };
+}
       setAnunciosFeed([nuevoAnuncio, ...anunciosFeed]);
-    }
+    
     resetFormulario();
   };
 
@@ -116,7 +160,7 @@ export default function EditorAnuncios() {
         border: idEdicion ? '2px solid #f7a600' : 'none'
       }}>
         <CardContent sx={{ p: 4 }}>
-          <Box component="form" onSubmit={handlePublicar} sx={{ display: 'flex', flexDirection: 'column' }}>
+          <Box component="form" onSubmit={(e) => handlePublicar(e)} sx={{ display: 'flex', flexDirection: 'column' }}>
             
             <TextField label="Título del Anuncio" fullWidth required sx={{ mb: 3 }} value={titulo} onChange={(e) => setTitulo(e.target.value)} />
             <TextField label="Texto del Anuncio" fullWidth required multiline minRows={5} sx={{ mb: 3 }} placeholder="Escribí el texto acá..." value={contenido} onChange={(e) => setContenido(e.target.value)} />
@@ -126,7 +170,7 @@ export default function EditorAnuncios() {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                 <Button component="label" variant="outlined" startIcon={<CloudUploadIcon />} sx={{ color: '#0B1E3B', borderColor: '#0B1E3B', textTransform: 'none', '&:hover': { borderColor: '#f7a600', color: '#f7a600' } }}>
                   Seleccionar archivo
-                  <input type="file" hidden onChange={handleArchivoChange} />
+                  <input type="file" hidden onChange={(e) => handleArchivoChange(e)} />
                 </Button>
                 {archivo ? (
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: '#ffffff', p: '4px 12px', borderRadius: 1, border: '1px solid #e2e8f0' }}>
