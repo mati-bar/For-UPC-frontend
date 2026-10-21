@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { 
-  Box, Card, CardContent, Typography, TextField, Button, FormControl, 
-  InputLabel, Select, MenuItem, Checkbox, ListItemText, OutlinedInput, 
-  FormControlLabel, Switch, IconButton, Divider, Chip 
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Box, Card, CardContent, Typography, TextField, Button, FormControl,
+  InputLabel, Select, MenuItem, Checkbox, ListItemText, OutlinedInput,
+  FormControlLabel, Switch, IconButton, Divider, Chip, Alert, CircularProgress, Link
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
@@ -10,203 +10,251 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import CloseIcon from '@mui/icons-material/Close';
 
+const API_URL = 'http://localhost:8080';
+const MAX_IMAGEN = 5 * 1024 * 1024;   // 5 MB
+const MAX_ARCHIVO = 10 * 1024 * 1024; // 10 MB
+
+const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
+
+// El backend puede devolver texto plano en errores y en DELETE: nunca asumir JSON.
+const leerError = async (res) => {
+  const texto = await res.text();
+  const base = `Error ${res.status}`;
+  if (res.status === 401) return 'Tu sesión venció. Volvé a iniciar sesión.';
+  if (res.status === 403) return 'No tenés permisos de administrador para esta acción.';
+  if (res.status === 404) return 'La publicación no existe.';
+  return texto ? `${base}: ${texto}` : base;
+};
+
+const formatearFecha = (iso) => (iso ? new Date(iso).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '');
+
+// Arma las etiquetas de destino agrupadas por carrera: "Carrera: 1°, 2°"
+const etiquetasDestino = (anuncio) => {
+  if (anuncio.destinos && anuncio.destinos.length > 0) {
+    const porCarrera = {};
+    anuncio.destinos.forEach((d) => {
+      const nombre = d.carrera?.nombre ?? 'Carrera';
+      (porCarrera[nombre] = porCarrera[nombre] || []).push(d.anio?.numero);
+    });
+    return Object.entries(porCarrera).map(([nombre, anios]) =>
+      `${nombre}: ${anios.filter(Boolean).sort((a, b) => a - b).map((n) => `${n}°`).join(', ')}`
+    );
+  }
+  // Publicaciones históricas con carrera/anio individuales (legacy)
+  if (anuncio.carrera) return [`${anuncio.carrera.nombre}${anuncio.anio ? `: ${anuncio.anio.numero}°` : ''}`];
+  return ['Sin destino'];
+};
+
 export default function EditorAnuncios() {
   const [titulo, setTitulo] = useState('');
   const [contenido, setContenido] = useState('');
   const [archivo, setArchivo] = useState(null);
   const [imagen, setImagen] = useState(null);
   const [esUrgente, setEsUrgente] = useState(false);
-  const [esGeneral, setEsGeneral] = useState(true); 
-  const [carrerasDestino, setCarrerasDestino] = useState([]); 
-  const [aniosDestino, setAniosDestino] = useState({}); 
-  
-  // NUEVO: Estado para manejar la duración exacta que pide el backend
+  const [esGeneral, setEsGeneral] = useState(true);
   const [duracion, setDuracion] = useState('SIN_VENCIMIENTO');
-
   const [idEdicion, setIdEdicion] = useState(null);
+  const [anuncioEnEdicion, setAnuncioEnEdicion] = useState(null);
 
-  const [anunciosFeed, setAnunciosFeed] = useState([
-    {
-      id: 1,
-      titulo: 'Suspensión de clases presenciales por capacitación docente',
-      contenido: 'Estimados estudiantes, les informamos que el día viernes próximo las actividades académicas se realizarán de manera virtual a través de la plataforma institucional. Por favor revisar los materiales compartidos por los profesores de cada cátedra.',
-      fecha: 'Hace 2 horas',
-      destino: 'Tecnicatura en Programación - 2° Año',
-      urgente: true,
-      duracion: 'DIA'
-    },
-    {
-      id: 2,
-      titulo: 'Inscripción a mesas de exámenes finales',
-      contenido: 'Se encuentra abierta la inscripción para el turno de noviembre-diciembre. Recordar que deben tener las correlativas aprobadas.',
-      fecha: 'Hace 1 día',
-      destino: 'General (Todas las carreras)',
-      urgente: false,
-      duracion: 'SIN_VENCIMIENTO'
+  // Destinos: carreras elegidas (ids) y, por carrera, los anioCarreraId elegidos
+  const [carreras, setCarreras] = useState([]);              // [{id, nombre}]
+  const [aniosPorCarrera, setAniosPorCarrera] = useState({}); // {carreraId: [{anioCarreraId, numero}]}
+  const [carrerasDestino, setCarrerasDestino] = useState([]); // [carreraId]
+  const [aniosDestino, setAniosDestino] = useState({});       // {carreraId: [anioCarreraId]}
+
+  const [anunciosFeed, setAnunciosFeed] = useState([]);
+  const [cargandoFeed, setCargandoFeed] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState('');
+  const [exito, setExito] = useState('');
+
+  // ------------------------------------------------------------ carreras/años
+  const cargarAnios = useCallback(async (carreraId) => {
+    if (aniosPorCarrera[carreraId]) return aniosPorCarrera[carreraId];
+    const res = await fetch(`${API_URL}/carreras/${carreraId}/anios`);
+    if (!res.ok) throw new Error(await leerError(res));
+    const data = await res.json();
+    setAniosPorCarrera((prev) => ({ ...prev, [carreraId]: data }));
+    return data;
+  }, [aniosPorCarrera]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/carreras`);
+        if (!res.ok) throw new Error(await leerError(res));
+        setCarreras(await res.json());
+      } catch (err) {
+        setError(err.message || 'No se pudieron cargar las carreras.');
+      }
+    })();
+  }, []);
+
+  // ------------------------------------------------------------------- feed
+  const cargarFeed = useCallback(async () => {
+    setCargandoFeed(true);
+    try {
+      const res = await fetch(`${API_URL}/publicaciones`); // público, sin token
+      if (!res.ok) throw new Error(await leerError(res));
+      setAnunciosFeed(await res.json());
+    } catch (err) {
+      setError(err.message || 'No se pudo cargar el historial.');
+    } finally {
+      setCargandoFeed(false);
     }
-  ]);
+  }, []);
 
-  const handleArchivoChange = (e) => { 
-    console.log('Archivo seleccionado:', e.target.files[0]);
-    if (e.target.files && e.target.files[0]) {
-      if (e.target.files[0].type.startsWith('image/')) {
-      setImagen(e.target.files[0]); 
+  useEffect(() => { cargarFeed(); }, [cargarFeed]);
+
+  // ---------------------------------------------------------------- archivos
+  const handleArchivoChange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.type.startsWith('image/')) {
+      if (file.size > MAX_IMAGEN) return setError('La imagen supera el máximo de 5 MB.');
+      setImagen(file);
     } else {
-      setArchivo(e.target.files[0]); 
+      if (file.size > MAX_ARCHIVO) return setError('El archivo supera el máximo de 10 MB.');
+      setArchivo(file);
     }
-
-  };
-  }
-  
-  const handleEliminarArchivo = () => { setArchivo(null); };
-
-  const handleEditarAnuncio = (anuncio) => {
-    setTitulo(anuncio.titulo);
-    setContenido(anuncio.contenido);
-    setEsUrgente(anuncio.urgente);
-    setDuracion(anuncio.duracion || 'SIN_VENCIMIENTO'); // Recupera la duración
-    setIdEdicion(anuncio.id); 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setError('');
   };
 
+  const handleEliminarArchivo = () => { setArchivo(null); setImagen(null); };
+
+  // -------------------------------------------------------------- formulario
   const resetFormulario = () => {
     setTitulo('');
     setContenido('');
     setEsUrgente(false);
-    setDuracion('SIN_VENCIMIENTO'); // Resetea la duración al valor por defecto
-    setIdEdicion(null); 
+    setDuracion('SIN_VENCIMIENTO');
+    setArchivo(null);
+    setImagen(null);
+    setEsGeneral(true);
+    setCarrerasDestino([]);
+    setAniosDestino({});
+    setIdEdicion(null);
+    setAnuncioEnEdicion(null);
   };
-  
-  const handlePublicar = (e) => { 
-    e.preventDefault(); 
-    
-    if (idEdicion) {
-        const nuevoAnuncio = {
-          titulo: titulo,
-          mensaje: contenido,
-          carreraId: 1, // se cambia con backend
-          anioId: 1, // se cambia con backend
-          urgente: esUrgente,
-          duracion: duracion // Se suma al objeto final
-          
-        };
 
-        console.log('Nuevo anuncio a publicar:', nuevoAnuncio);
-
-      try {
-        const formData = new FormData();
-
-        if (archivo) {
-          // 'archivo' o 'file' según cómo lo reciba tu backend (ej: @RequestParam("archivo") o req.file)
-          formData.append('archivo', archivo);
-        } else {
-          // 'archivo' o 'file' según cómo lo reciba tu backend (ej: @RequestParam("archivo") o req.file)
-          formData.append('imagen', imagen);
-        }
-
-        formData.append('datos', JSON.stringify(nuevoAnuncio));
-
-        
-        const respuesta = fetch(`http://localhost:8080/publicaciones/${idEdicion}`, {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-
-        if (respuesta.status === 201) {
-          setExito('¡Publicación exitosa!');
-          setTabValue(0); // Lo mandamos al login para que entre
-          setNombre(''); setApellido(''); setEmail(''); setPassword('');
-          setSelecciones([{ carreraId: '', anioCarreraId: '', aniosDisponibles: [] }]);
-        } else {
-          const mensajeError = respuesta.text();
-          setError(mensajeError);
-        }
-      
-        setAnunciosFeed([nuevoAnuncio, ...anunciosFeed]);
-
-      } catch (err) {
-        setError('Error al publicar el anuncio.');
-      } finally {
-        //setLoading(false);
-      } 
-
-
-      const feedActualizado = anunciosFeed.map(anuncio => 
-        anuncio.id === idEdicion 
-          ? { ...anuncio, titulo: titulo, contenido: contenido, urgente: esUrgente, duracion: duracion } 
-          : anuncio
-      );
-
-      setAnunciosFeed(feedActualizado);
-
-
-
-    } else {
-      const nuevoAnuncio = {
-        id: Date.now(),
-        titulo: titulo,
-        mensaje: contenido,
-        carreraId: 1, // se cambia con backend
-        anioId: 1, // se cambia con backend
-        urgente: esUrgente,
-        duracion: duracion // Se suma al objeto final
-        
-      };
-
-      console.log('Nuevo anuncio a publicar:', nuevoAnuncio);
-
+  const handleEditarAnuncio = async (anuncio) => {
+    setError('');
+    setExito('');
     try {
-      const formData = new FormData();
+      // Reconstruir la selección: destinos devuelve pares carrera/anio y hay que
+      // convertirlos a anioCarreraId usando GET /carreras/{id}/anios.
+      const destinos = anuncio.destinos || [];
+      const idsCarrera = [...new Set(destinos.map((d) => d.carrera.id))];
+      const listas = await Promise.all(idsCarrera.map((id) => cargarAnios(id)));
 
-      if (archivo) {
-        // 'archivo' o 'file' según cómo lo reciba tu backend (ej: @RequestParam("archivo") o req.file)
-        formData.append('archivo', archivo);
-      } else {
-        // 'archivo' o 'file' según cómo lo reciba tu backend (ej: @RequestParam("archivo") o req.file)
-        formData.append('imagen', imagen);
-      }
-
-      formData.append('datos', JSON.stringify(nuevoAnuncio));
-
-      
-      const respuesta = fetch('http://localhost:8080/publicaciones', {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+      const seleccion = {};
+      destinos.forEach((d) => {
+        const lista = listas[idsCarrera.indexOf(d.carrera.id)] || [];
+        const match = lista.find((a) => a.numero === d.anio.numero);
+        if (match) (seleccion[d.carrera.id] = seleccion[d.carrera.id] || []).push(match.anioCarreraId);
       });
 
-      if (respuesta.status === 201) {
-        setExito('¡Publicación exitosa!');
-        setTabValue(0); // Lo mandamos al login para que entre
-        setNombre(''); setApellido(''); setEmail(''); setPassword('');
-        setSelecciones([{ carreraId: '', anioCarreraId: '', aniosDisponibles: [] }]);
-      } else {
-        const mensajeError = respuesta.text();
-        setError(mensajeError);
+      setTitulo(anuncio.titulo);
+      setContenido(anuncio.mensaje);
+      setEsUrgente(!!anuncio.urgente);
+      setDuracion('MANTENER'); // la respuesta no trae "duracion": por defecto se conserva la expiración
+      setArchivo(null);
+      setImagen(null);
+      setEsGeneral(false);
+      setCarrerasDestino(idsCarrera);
+      setAniosDestino(seleccion);
+      setIdEdicion(anuncio.id);
+      setAnuncioEnEdicion(anuncio);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      if (destinos.length === 0) {
+        setError('Esta publicación es histórica (sin destinos múltiples). Elegí al menos un destino antes de guardar.');
       }
-    
-      setAnunciosFeed([nuevoAnuncio, ...anunciosFeed]);
-
     } catch (err) {
-      setError('Error al publicar el anuncio.');
+      setError(err.message || 'No se pudo cargar la publicación para editar.');
+    }
+  };
+
+  const toggleCarreras = async (ids) => {
+    setCarrerasDestino(ids);
+    // Quitar selecciones de carreras destildadas
+    setAniosDestino((prev) => Object.fromEntries(Object.entries(prev).filter(([cid]) => ids.includes(Number(cid)))));
+    try {
+      await Promise.all(ids.map((id) => cargarAnios(id)));
+    } catch (err) {
+      setError(err.message || 'No se pudieron cargar los años.');
+    }
+  };
+
+  // Para "Anuncio General": todos los anioCarreraId de todas las carreras
+  const obtenerTodosLosIds = async () => {
+    const listas = await Promise.all(carreras.map((c) => cargarAnios(c.id)));
+    return listas.flat().map((a) => a.anioCarreraId);
+  };
+
+  // --------------------------------------------------------------- POST / PUT
+  const handlePublicar = async (e) => {
+    e.preventDefault();
+    setError('');
+    setExito('');
+    setEnviando(true);
+
+    try {
+      const ids = esGeneral
+        ? await obtenerTodosLosIds()
+        : carrerasDestino.flatMap((c) => aniosDestino[c] || []);
+      const inscripciones = [...new Set(ids)].map((anioCarreraId) => ({ anioCarreraId }));
+
+      if (inscripciones.length === 0) {
+        throw new Error('Elegí al menos un año de una carrera (o marcá Anuncio General).');
+      }
+
+      const datos = { titulo, mensaje: contenido, urgente: esUrgente, inscripciones };
+      if (duracion !== 'MANTENER') datos.duracion = duracion; // omitida en PUT = conserva la expiración
+
+      const form = new FormData();
+      form.append('datos', JSON.stringify(datos));
+      if (imagen) form.append('imagen', imagen);
+      if (archivo) form.append('archivo', archivo);
+
+      const esEdicion = idEdicion !== null;
+      const res = await fetch(esEdicion ? `${API_URL}/publicaciones/${idEdicion}` : `${API_URL}/publicaciones`, {
+        method: esEdicion ? 'PUT' : 'POST',
+        headers: authHeaders(), // sin Content-Type: lo arma el navegador
+        body: form
+      });
+      if (!res.ok) throw new Error(await leerError(res));
+
+      setExito(esEdicion ? 'Cambios guardados.' : '¡Publicación exitosa!');
+      resetFormulario();
+      await cargarFeed();
+    } catch (err) {
+      setError(err.message || 'Error al publicar el anuncio.');
     } finally {
-      //setLoading(false);
-    } 
-    };
-
-    
-    resetFormulario();
+      setEnviando(false);
+    }
   };
 
-  const handleEliminarAnuncio = (id) => {
-    const nuevaLista = anunciosFeed.filter(anuncio => anuncio.id !== id);
-    setAnunciosFeed(nuevaLista);
+  // ------------------------------------------------------------------ DELETE
+  const handleEliminarAnuncio = async (id) => {
+    if (!window.confirm('¿Seguro que querés eliminar este anuncio?')) return;
+    setError('');
+    setExito('');
+    try {
+      const res = await fetch(`${API_URL}/publicaciones/${id}`, { method: 'DELETE', headers: authHeaders() });
+      if (!res.ok) throw new Error(await leerError(res));
+      await res.text(); // la respuesta es texto, no JSON
+      setAnunciosFeed((prev) => prev.filter((a) => a.id !== id));
+      if (idEdicion === id) resetFormulario();
+      setExito('Anuncio eliminado.');
+    } catch (err) {
+      setError(err.message || 'Error al eliminar el anuncio.');
+    }
   };
+
+  const adjunto = archivo || imagen;
+  const nombreCarrera = (id) => carreras.find((c) => c.id === id)?.nombre ?? id;
 
   return (
     <Box>
@@ -219,45 +267,49 @@ export default function EditorAnuncios() {
         </Typography>
       </Box>
 
-      <Card sx={{ 
-        borderRadius: 4, 
-        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', 
-        mb: 6,
-        border: idEdicion ? '2px solid #f7a600' : 'none'
-      }}>
+      {error && <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>{error}</Alert>}
+      {exito && <Alert severity="success" sx={{ mb: 3 }} onClose={() => setExito('')}>{exito}</Alert>}
+
+      <Card sx={{ borderRadius: 4, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', mb: 6, border: idEdicion ? '2px solid #f7a600' : 'none' }}>
         <CardContent sx={{ p: 4 }}>
-          <Box component="form" onSubmit={(e) => handlePublicar(e)} sx={{ display: 'flex', flexDirection: 'column' }}>
-            
+          <Box component="form" onSubmit={handlePublicar} sx={{ display: 'flex', flexDirection: 'column' }}>
+
             <TextField label="Título del Anuncio" fullWidth required sx={{ mb: 3 }} value={titulo} onChange={(e) => setTitulo(e.target.value)} />
             <TextField label="Texto del Anuncio" fullWidth required multiline minRows={5} sx={{ mb: 3 }} placeholder="Escribí el texto acá..." value={contenido} onChange={(e) => setContenido(e.target.value)} />
 
             <Box sx={{ mb: 3, p: 2, border: '1px dashed #cbd5e1', borderRadius: 2, bgcolor: '#f8fafc' }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#000000', mb: 1.5 }}>Adjuntar archivo o imagen (opcional)</Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#000000', mb: 1.5 }}>
+                Adjuntar archivo o imagen (opcional)
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                Imagen hasta 5 MB. PDF, DOC o DOCX hasta 10 MB.
+                {idEdicion && ' Si no elegís un archivo nuevo, se conservan los actuales.'}
+              </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                 <Button component="label" variant="outlined" startIcon={<CloudUploadIcon />} sx={{ color: '#0B1E3B', borderColor: '#0B1E3B', textTransform: 'none', '&:hover': { borderColor: '#f7a600', color: '#f7a600' } }}>
                   Seleccionar archivo
-                  <input type="file" hidden onChange={(e) => handleArchivoChange(e)} />
+                  <input type="file" hidden accept="image/*,.pdf,.doc,.docx" onChange={handleArchivoChange} />
                 </Button>
-                {archivo ? (
+                {adjunto ? (
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: '#ffffff', p: '4px 12px', borderRadius: 1, border: '1px solid #e2e8f0' }}>
                     <AttachFileIcon fontSize="small" sx={{ color: '#f7a600' }} />
-                    <Typography variant="body2" sx={{ fontWeight: 500, color: '#334155' }}>{archivo.name}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500, color: '#334155' }}>{adjunto.name}</Typography>
                     <IconButton size="small" color="error" onClick={handleEliminarArchivo}><DeleteIcon fontSize="small" /></IconButton>
                   </Box>
                 ) : (
-                  <Typography variant="caption" color="text.secondary">Ningún archivo seleccionado aún.</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {anuncioEnEdicion?.archivoNombre
+                      ? `Archivo actual: ${anuncioEnEdicion.archivoNombre}`
+                      : 'Ningún archivo seleccionado aún.'}
+                  </Typography>
                 )}
               </Box>
             </Box>
 
-            {/*Duración de publicación */}
             <FormControl fullWidth sx={{ mb: 3 }}>
               <InputLabel>Duración de la Publicación</InputLabel>
-              <Select
-                value={duracion}
-                label="Duración de la Publicación"
-                onChange={(e) => setDuracion(e.target.value)}
-              >
+              <Select value={duracion} label="Duración de la Publicación" onChange={(e) => setDuracion(e.target.value)}>
+                {idEdicion && <MenuItem value="MANTENER">Mantener la expiración actual</MenuItem>}
                 <MenuItem value="HORA">1 Hora</MenuItem>
                 <MenuItem value="DIA">24 Horas</MenuItem>
                 <MenuItem value="SEMANA">1 Semana</MenuItem>
@@ -269,42 +321,63 @@ export default function EditorAnuncios() {
               <FormControlLabel control={<Switch color="error" checked={esUrgente} onChange={(e) => setEsUrgente(e.target.checked)} />} label={<Typography sx={{ fontWeight: 'bold', color: '#e11d48' }}>Marcar anuncio como URGENTE / DESTACADO</Typography>} />
             </Box>
 
-            <FormControlLabel control={<Checkbox checked={esGeneral} sx={{ color: '#f7a600', '&.Mui-checked': { color: '#f7a600' } }} onChange={(e) => { setEsGeneral(e.target.checked); if (e.target.checked) { setCarrerasDestino([]); setAniosDestino({}); } }} />} label="Anuncio General (Se manda a todas las carreras y años)" sx={{ mb: 2 }} />
+            <FormControlLabel
+              control={<Checkbox checked={esGeneral} sx={{ color: '#f7a600', '&.Mui-checked': { color: '#f7a600' } }} onChange={(e) => { setEsGeneral(e.target.checked); if (e.target.checked) { setCarrerasDestino([]); setAniosDestino({}); } }} />}
+              label="Anuncio General (Se manda a todas las carreras y años)"
+              sx={{ mb: 2 }}
+            />
 
             {!esGeneral && (
               <Box sx={{ p: 2, border: '1px solid #e2e8f0', borderRadius: 2, mb: 3, bgcolor: '#fafafa' }}>
                 <Typography variant="subtitle2" sx={{ mb: 2, color: '#0B1E3B', fontWeight: 'bold' }}>Elegir a qué carreras y años mandarlo:</Typography>
+
                 <FormControl fullWidth size="small" sx={{ mb: 2 }}>
                   <InputLabel>Carreras</InputLabel>
-                  <Select multiple value={carrerasDestino} onChange={(e) => setCarrerasDestino(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)} input={<OutlinedInput label="Carreras" />} renderValue={(selected) => selected.join(', ')}>
-                    {['Tecnicatura Universitaria en Programación Full Stack', 'Profesorado Universitario de Biología', 'Profesorado Universitario de Geografía', 'Profesorado de Educación Secundaria en Historia', 'Profesorado de Educación Secundaria en Matemática', 'Prof. Educación Física'].map((carrera) => (
-                      <MenuItem key={carrera} value={carrera}>
-                        <Checkbox checked={carrerasDestino.indexOf(carrera) > -1} sx={{ color: '#f7a600', '&.Mui-checked': { color: '#f7a600' } }} />
-                        <ListItemText primary={carrera} />
+                  <Select
+                    multiple
+                    value={carrerasDestino}
+                    onChange={(e) => toggleCarreras(e.target.value)}
+                    input={<OutlinedInput label="Carreras" />}
+                    renderValue={(selected) => selected.map(nombreCarrera).join(', ')}
+                  >
+                    {carreras.map((c) => (
+                      <MenuItem key={c.id} value={c.id}>
+                        <Checkbox checked={carrerasDestino.includes(c.id)} sx={{ color: '#f7a600', '&.Mui-checked': { color: '#f7a600' } }} />
+                        <ListItemText primary={c.nombre} />
                       </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
-                
-                {carrerasDestino.map((carrera) => (
-                  <FormControl fullWidth size="small" sx={{ mb: 2 }} key={carrera}>
-                    <InputLabel>Año/s - {carrera}</InputLabel>
-                    <Select multiple value={aniosDestino[carrera] || []} onChange={(e) => setAniosDestino({ ...aniosDestino, [carrera]: typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value })} input={<OutlinedInput label={`Año/s - ${carrera}`} />} renderValue={(selected) => selected.join(', ')}>
-                      {['1er Año', '2do Año', '3er Año', '4to Año'].map((anio) => (
-                        <MenuItem key={anio} value={anio}>
-                          <Checkbox checked={(aniosDestino[carrera] || []).indexOf(anio) > -1} sx={{ color: '#f7a600', '&.Mui-checked': { color: '#f7a600' } }} />
-                          <ListItemText primary={anio} />
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                ))}
+
+                {carrerasDestino.map((carreraId) => {
+                  const anios = aniosPorCarrera[carreraId] || [];
+                  const label = `Año/s - ${nombreCarrera(carreraId)}`;
+                  return (
+                    <FormControl fullWidth size="small" sx={{ mb: 2 }} key={carreraId}>
+                      <InputLabel>{label}</InputLabel>
+                      <Select
+                        multiple
+                        value={aniosDestino[carreraId] || []}
+                        onChange={(e) => setAniosDestino({ ...aniosDestino, [carreraId]: e.target.value })}
+                        input={<OutlinedInput label={label} />}
+                        renderValue={(selected) => anios.filter((a) => selected.includes(a.anioCarreraId)).map((a) => `${a.numero}° año`).join(', ')}
+                      >
+                        {anios.map((a) => (
+                          <MenuItem key={a.anioCarreraId} value={a.anioCarreraId}>
+                            <Checkbox checked={(aniosDestino[carreraId] || []).includes(a.anioCarreraId)} sx={{ color: '#f7a600', '&.Mui-checked': { color: '#f7a600' } }} />
+                            <ListItemText primary={`${a.numero}° año`} />
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  );
+                })}
               </Box>
             )}
 
             <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-              <Button type="submit" variant="contained" size="large" sx={{ flexGrow: 1, bgcolor: '#f7a600', '&:hover': { bgcolor: '#bc7e01' }, py: 1.5, fontWeight: 'bold' }}>
-                {idEdicion ? 'Guardar Cambios' : 'Publicar Y Enviar Notificación'}
+              <Button type="submit" variant="contained" size="large" disabled={enviando} sx={{ flexGrow: 1, bgcolor: '#f7a600', '&:hover': { bgcolor: '#bc7e01' }, py: 1.5, fontWeight: 'bold' }}>
+                {enviando ? <CircularProgress size={24} color="inherit" /> : idEdicion ? 'Guardar Cambios' : 'Publicar Y Enviar Notificación'}
               </Button>
               {idEdicion && (
                 <Button variant="outlined" size="large" onClick={resetFormulario} startIcon={<CloseIcon />} sx={{ color: '#64748b', borderColor: '#cbd5e1', '&:hover': { bgcolor: '#f1f5f9', borderColor: '#94a3b8' } }}>
@@ -326,39 +399,61 @@ export default function EditorAnuncios() {
         </Typography>
       </Box>
 
-      {anunciosFeed.map((anuncio) => (
-        <Card key={anuncio.id} sx={{ 
-          borderRadius: 2.5, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.05)', mb: 3,
-          transition: 'transform 0.15s ease, box-shadow 0.15s ease', '&:hover': { boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.07)' }
-        }}>
-          <CardContent sx={{ p: { xs: 2.5, sm: 3 } }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-              <Chip 
-                label={anuncio.destino} 
-                size="small" 
-                sx={{ bgcolor: anuncio.urgente ? '#ffe4e6' : '#f1f5f9', color: anuncio.urgente ? '#e11d48' : '#334155', fontWeight: 600, fontSize: '0.75rem', border: anuncio.urgente ? '1px solid #fecdd3' : '1px solid #e2e8f0' }} 
-              />
-              <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 500 }}>{anuncio.fecha}</Typography>
-            </Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#0f172a', mb: 1, fontSize: '1.05rem', lineHeight: 1.4 }}>
-              {anuncio.titulo}
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#475569', mb: 2, lineHeight: 1.65, whiteSpace: 'pre-line' }}>
-              {anuncio.contenido}
-            </Typography>
-            <Divider sx={{ my: 1.5, borderColor: '#f1f5f9' }} />
+      {cargandoFeed && <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>}
 
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5 }}>
-              <Button variant="outlined" size="small" startIcon={<EditIcon />} onClick={() => handleEditarAnuncio(anuncio)} sx={{ color: '#f7a600', borderColor: '#f7a600', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#bc7e01', bgcolor: '#fffbeb', color: '#bc7e01' } }}>
-                Editar
-              </Button>
-              <Button variant="outlined" color="error" size="small" startIcon={<DeleteIcon />} onClick={() => handleEliminarAnuncio(anuncio.id)} sx={{ textTransform: 'none', fontWeight: 600 }}>
-                Eliminar
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
-      ))}
+      {!cargandoFeed && anunciosFeed.length === 0 && (
+        <Typography variant="body2" sx={{ color: '#64748b', textAlign: 'center', py: 4 }}>
+          Todavía no hay anuncios publicados.
+        </Typography>
+      )}
+
+      {anunciosFeed.map((anuncio) => {
+        const vencido = anuncio.fechaExpiracion && new Date(anuncio.fechaExpiracion) < new Date();
+        return (
+          <Card key={anuncio.id} sx={{ borderRadius: 2.5, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.05)', mb: 3, opacity: vencido ? 0.65 : 1, '&:hover': { boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.07)' } }}>
+            <CardContent sx={{ p: { xs: 2.5, sm: 3 } }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 1.5 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                  {anuncio.urgente && <Chip label="Urgente" size="small" sx={{ bgcolor: '#ffe4e6', color: '#e11d48', fontWeight: 600, border: '1px solid #fecdd3' }} />}
+                  {vencido && <Chip label="Vencido" size="small" sx={{ fontWeight: 600 }} />}
+                  {etiquetasDestino(anuncio).map((et) => (
+                    <Chip key={et} label={et} size="small" sx={{ bgcolor: '#f1f5f9', color: '#334155', fontWeight: 600, fontSize: '0.75rem', border: '1px solid #e2e8f0' }} />
+                  ))}
+                </Box>
+                <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                  <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 500, display: 'block' }}>{formatearFecha(anuncio.fecha)}</Typography>
+                  {anuncio.fechaExpiracion && (
+                    <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block' }}>Vence: {formatearFecha(anuncio.fechaExpiracion)}</Typography>
+                  )}
+                </Box>
+              </Box>
+
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#0f172a', mb: 1, fontSize: '1.05rem', lineHeight: 1.4 }}>{anuncio.titulo}</Typography>
+              <Typography variant="body2" sx={{ color: '#475569', mb: 2, lineHeight: 1.65, whiteSpace: 'pre-line' }}>{anuncio.mensaje}</Typography>
+
+              {anuncio.imagenUrl && (
+                <Box component="img" src={anuncio.imagenUrl} alt={anuncio.titulo} sx={{ maxWidth: '100%', maxHeight: 280, borderRadius: 1.5, mb: 2, display: 'block' }} />
+              )}
+              {anuncio.archivoUrl && (
+                <Link href={anuncio.archivoUrl} target="_blank" rel="noopener noreferrer" underline="hover" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mb: 2, fontSize: '0.875rem' }}>
+                  <AttachFileIcon fontSize="small" /> {anuncio.archivoNombre || 'Ver archivo adjunto'}
+                </Link>
+              )}
+
+              <Divider sx={{ my: 1.5, borderColor: '#f1f5f9' }} />
+
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5 }}>
+                <Button variant="outlined" size="small" startIcon={<EditIcon />} onClick={() => handleEditarAnuncio(anuncio)} sx={{ color: '#f7a600', borderColor: '#f7a600', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#bc7e01', bgcolor: '#fffbeb', color: '#bc7e01' } }}>
+                  Editar
+                </Button>
+                <Button variant="outlined" color="error" size="small" startIcon={<DeleteIcon />} onClick={() => handleEliminarAnuncio(anuncio.id)} sx={{ textTransform: 'none', fontWeight: 600 }}>
+                  Eliminar
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        );
+      })}
     </Box>
   );
 }
