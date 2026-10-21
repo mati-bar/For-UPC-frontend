@@ -78,15 +78,72 @@ export default function EditorAnuncios() {
   };
   
   const handlePublicar = (e) => { 
-    //e.preventDefault(); 
+    e.preventDefault(); 
     
     if (idEdicion) {
+        const nuevoAnuncio = {
+          titulo: titulo,
+          mensaje: contenido,
+          carreraId: 1, // se cambia con backend
+          anioId: 1, // se cambia con backend
+          urgente: esUrgente,
+          duracion: duracion // Se suma al objeto final
+          
+        };
+
+        console.log('Nuevo anuncio a publicar:', nuevoAnuncio);
+
+      try {
+        const formData = new FormData();
+
+        if (archivo) {
+          // 'archivo' o 'file' según cómo lo reciba tu backend (ej: @RequestParam("archivo") o req.file)
+          formData.append('archivo', archivo);
+        } else {
+          // 'archivo' o 'file' según cómo lo reciba tu backend (ej: @RequestParam("archivo") o req.file)
+          formData.append('imagen', imagen);
+        }
+
+        formData.append('datos', JSON.stringify(nuevoAnuncio));
+
+        
+        const respuesta = fetch(`http://localhost:8080/publicaciones/${idEdicion}`, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        if (respuesta.status === 201) {
+          setExito('¡Publicación exitosa!');
+          setTabValue(0); // Lo mandamos al login para que entre
+          setNombre(''); setApellido(''); setEmail(''); setPassword('');
+          setSelecciones([{ carreraId: '', anioCarreraId: '', aniosDisponibles: [] }]);
+        } else {
+          const mensajeError = respuesta.text();
+          setError(mensajeError);
+        }
+      
+        setAnunciosFeed([nuevoAnuncio, ...anunciosFeed]);
+
+      } catch (err) {
+        setError('Error al publicar el anuncio.');
+      } finally {
+        //setLoading(false);
+      } 
+
+
       const feedActualizado = anunciosFeed.map(anuncio => 
         anuncio.id === idEdicion 
           ? { ...anuncio, titulo: titulo, contenido: contenido, urgente: esUrgente, duracion: duracion } 
           : anuncio
       );
+
       setAnunciosFeed(feedActualizado);
+
+
+
     } else {
       const nuevoAnuncio = {
         id: Date.now(),
