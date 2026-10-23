@@ -19,9 +19,13 @@ const mensajeDeError = (error, porDefecto) => {
   return texto ? `${porDefecto} ${texto}` : `${porDefecto} (error ${status})`;
 };
 
+// El backend solo acepta de 1 a 4 años
+const OPCIONES_ANIOS = [1, 2, 3, 4];
+
 export default function GestionCarreras() {
   const [carreras, setCarreras] = useState([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [carreraEditandoId, setCarreraEditandoId] = useState(null); // null = modo creación
   const [nombre, setNombre] = useState('');
   const [cantidadAnios, setCantidadAnios] = useState(3);
 
@@ -29,6 +33,8 @@ export default function GestionCarreras() {
   const [guardando, setGuardando] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [exitoMsg, setExitoMsg] = useState(null);
+
+  const editando = carreraEditandoId !== null;
 
   // GET /carreras (silencioso = no muestra el spinner de la tabla)
   const cargarCarreras = async (silencioso = false) => {
@@ -46,25 +52,69 @@ export default function GestionCarreras() {
 
   useEffect(() => { cargarCarreras(); }, []);
 
-  // POST /carreras
-  const handleCrearCarrera = async (e) => {
+  const resetFormulario = () => {
+    setNombre('');
+    setCantidadAnios(3);
+    setCarreraEditandoId(null);
+    setMostrarFormulario(false);
+  };
+
+  // Botón superior: abre el formulario en modo creación o lo cierra
+  const handleToggleFormulario = () => {
+    if (mostrarFormulario) {
+      resetFormulario();
+    } else {
+      setCarreraEditandoId(null);
+      setNombre('');
+      setCantidadAnios(3);
+      setMostrarFormulario(true);
+    }
+  };
+
+  // Precarga el formulario con la carrera elegida.
+  // GET /carreras no trae la cantidad de años, así que se consulta GET /carreras/{id}/anios
+  const handleEditar = async (carrera) => {
+    setErrorMsg(null);
+    setExitoMsg(null);
+    setCarreraEditandoId(carrera.id);
+    setNombre(carrera.nombre);
+    setMostrarFormulario(true);
+
+    try {
+      const res = await api.get(`/carreras/${carrera.id}/anios`);
+      const cantidad = Array.isArray(res.data) ? res.data.length : 0;
+      setCantidadAnios(OPCIONES_ANIOS.includes(cantidad) ? cantidad : 3);
+    } catch (error) {
+      console.error('Error al obtener los años de la carrera:', error);
+      setCantidadAnios(3);
+      setErrorMsg(mensajeDeError(error, 'No se pudo obtener la duración actual. Revisá el valor antes de guardar.'));
+    }
+  };
+
+  // POST /carreras  o  PUT /carreras/{id}
+  const handleGuardar = async (e) => {
     e.preventDefault();
     setGuardando(true);
     setErrorMsg(null);
     setExitoMsg(null);
 
+    const datos = {
+      nombre: nombre.trim(),
+      cantidadAnios: Number(cantidadAnios)
+    };
+
     try {
-      await api.post('/carreras', {
-        nombre: nombre.trim(),
-        cantidadAnios: Number(cantidadAnios) // el backend actual podría ignorarlo: ver nota en la respuesta
-      });
-      setNombre('');
-      setCantidadAnios(3);
-      setMostrarFormulario(false);
-      setExitoMsg('Carrera creada.');
+      if (editando) {
+        await api.put(`/carreras/${carreraEditandoId}`, datos);
+        setExitoMsg('Carrera actualizada.');
+      } else {
+        await api.post('/carreras', datos);
+        setExitoMsg('Carrera creada.');
+      }
+      resetFormulario();
       await cargarCarreras(true); // la lista siempre refleja lo que quedó guardado en el backend
     } catch (error) {
-      console.error('Error al crear carrera:', error);
+      console.error('Error al guardar carrera:', error);
       setErrorMsg(mensajeDeError(error, 'No se pudo guardar la carrera.'));
     } finally {
       setGuardando(false);
@@ -80,6 +130,7 @@ export default function GestionCarreras() {
     try {
       await api.delete(`/carreras/${id}`);
       setCarreras((prev) => prev.filter((c) => c.id !== id));
+      if (id === carreraEditandoId) resetFormulario(); // si la estaba editando, se cierra el formulario
       setExitoMsg('Carrera eliminada.');
     } catch (error) {
       console.error('Error al eliminar:', error);
@@ -96,7 +147,7 @@ export default function GestionCarreras() {
 
         <Button
           variant={mostrarFormulario ? 'outlined' : 'contained'}
-          onClick={() => setMostrarFormulario(!mostrarFormulario)}
+          onClick={handleToggleFormulario}
           sx={{
             bgcolor: mostrarFormulario ? 'transparent' : '#f7a600',
             color: mostrarFormulario ? '#64748b' : '#fff',
@@ -117,9 +168,9 @@ export default function GestionCarreras() {
         <Card sx={{ mb: 4, borderRadius: 2, border: '2px solid #f7a600', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}>
           <CardContent sx={{ p: 3 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#0B1E3B', mb: 2 }}>
-              Registrar nueva carrera en el sistema
+              {editando ? 'Editar carrera' : 'Registrar nueva carrera en el sistema'}
             </Typography>
-            <Box component="form" onSubmit={handleCrearCarrera} sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Box component="form" onSubmit={handleGuardar} sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
 
               <TextField
                 label="Nombre de la Carrera"
@@ -139,7 +190,7 @@ export default function GestionCarreras() {
                   onChange={(e) => setCantidadAnios(e.target.value)}
                   disabled={guardando}
                 >
-                  {[1, 2, 3, 4, 5].map((n) => (
+                  {OPCIONES_ANIOS.map((n) => (
                     <MenuItem key={n} value={n}>{n} {n === 1 ? 'Año' : 'Años'}</MenuItem>
                   ))}
                 </Select>
@@ -151,7 +202,9 @@ export default function GestionCarreras() {
                 disabled={guardando || !nombre.trim()}
                 sx={{ bgcolor: '#f7a600', '&:hover': { bgcolor: '#bc7e01' }, color: '#fff', fontWeight: 'bold', height: '40px', textTransform: 'none' }}
               >
-                {guardando ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : 'Guardar Carrera'}
+                {guardando
+                  ? <CircularProgress size={22} sx={{ color: '#fff' }} />
+                  : (editando ? 'Guardar Cambios' : 'Guardar Carrera')}
               </Button>
 
             </Box>
@@ -165,7 +218,7 @@ export default function GestionCarreras() {
             <TableRow>
               <TableCell sx={{ fontWeight: 'bold', color: '#0B1E3B', width: '10%' }}>ID</TableCell>
               <TableCell sx={{ fontWeight: 'bold', color: '#0B1E3B' }}>Nombre de la Carrera</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: 'right', color: '#0B1E3B', width: '20%' }}>Acciones</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: 'right', color: '#0B1E3B', width: '25%' }}>Acciones</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -187,6 +240,14 @@ export default function GestionCarreras() {
                   <TableCell>{carrera.id}</TableCell>
                   <TableCell>{carrera.nombre}</TableCell>
                   <TableCell sx={{ textAlign: 'right' }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      sx={{ fontWeight: 'bold', textTransform: 'none', mr: 1, color: '#0B1E3B', borderColor: '#0B1E3B' }}
+                      onClick={() => handleEditar(carrera)}
+                    >
+                      Editar
+                    </Button>
                     <Button
                       variant="outlined"
                       color="error"
