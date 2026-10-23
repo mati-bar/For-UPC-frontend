@@ -1,18 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box, Card, CardContent, Typography, TextField, Button, FormControl,
   InputLabel, Select, MenuItem, Checkbox, ListItemText, OutlinedInput,
-  FormControlLabel, Switch, IconButton, Divider, Chip, Alert, CircularProgress, Link
+  FormControlLabel, Switch, IconButton, Divider, Chip, Alert, CircularProgress, Link, Dialog, Pagination
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import CloseIcon from '@mui/icons-material/Close';
+import DownloadIcon from '@mui/icons-material/Download';
 
-const API_URL = 'http://localhost:8080';
+// En .env: VITE_API_URL=https://for-upc-backend.onrender.com
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 const MAX_IMAGEN = 5 * 1024 * 1024;   // 5 MB
 const MAX_ARCHIVO = 10 * 1024 * 1024; // 10 MB
+const POR_PAGINA = 5;                 // anuncios por página en el historial
 
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
@@ -26,7 +29,46 @@ const leerError = async (res) => {
   return texto ? `${base}: ${texto}` : base;
 };
 
+// Pide UNA página al backend (page empieza en 0). Devuelve { content, totalPages, totalElements, ... }
+async function pedirPublicaciones(numeroPagina) {
+  const res = await fetch(
+    `${API_URL}/publicaciones?page=${numeroPagina - 1}&size=${POR_PAGINA}`, // público, sin token
+    { cache: 'no-store' }
+  );
+  if (!res.ok) throw new Error(await leerError(res));
+  return res.json();
+}
+
 const formatearFecha = (iso) => (iso ? new Date(iso).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '');
+
+// Nombre de archivo a partir del título del anuncio: "Inscripciones abiertas" -> inscripciones-abiertas.jpg
+const nombreArchivo = (url, titulo) => {
+  const ext = (url.split('?')[0].match(/\.(png|jpe?g|gif|webp|svg)$/i) || [])[1] || 'jpg';
+  const base = (titulo || 'imagen')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
+  return `${base || 'imagen'}.${ext}`;
+};
+
+// El atributo "download" se ignora en imágenes de otro dominio (Supabase), por eso se
+// baja el archivo como blob. Si el servidor no lo permite, se abre en una pestaña nueva.
+async function descargarImagen(url, titulo) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    const blob = await res.blob();
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = nombreArchivo(url, titulo);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(href);
+  } catch {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}
 
 // Arma las etiquetas de destino agrupadas por carrera: "Carrera: 1°, 2°"
 const etiquetasDestino = (anuncio) => {
@@ -67,6 +109,11 @@ export default function EditorAnuncios() {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState('');
   const [exito, setExito] = useState('');
+  const [imagenAbierta, setImagenAbierta] = useState(null); // { url, titulo }
+  const [pagina, setPagina] = useState(1);                  // página actual (empieza en 1)
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [totalAnuncios, setTotalAnuncios] = useState(0);
+  const historialRef = useRef(null);
 
   // ------------------------------------------------------------ carreras/años
   const cargarAnios = useCallback(async (carreraId) => {
@@ -91,12 +138,31 @@ export default function EditorAnuncios() {
   }, []);
 
   // ------------------------------------------------------------------- feed
-  const cargarFeed = useCallback(async () => {
+  // El administrador ve TODOS los anuncios (sin filtrar por carrera), así que acá la
+  // paginación se hace en el servidor: cada página es una llamada con page y size.
+  const cargarFeed = useCallback(async (paginaPedida = 1) => {
     setCargandoFeed(true);
     try {
-      const res = await fetch(`${API_URL}/publicaciones`); // público, sin token
-      if (!res.ok) throw new Error(await leerError(res));
-      setAnunciosFeed(await res.json());
+      let numero = paginaPedida;
+      let data = await pedirPublicaciones(numero);
+
+      if (Array.isArray(data)) {
+        // Backend sin paginar (array simple): se pagina acá como respaldo
+        setTotalAnuncios(data.length);
+        setTotalPaginas(Math.max(1, Math.ceil(data.length / POR_PAGINA)));
+        setAnunciosFeed(data.slice((numero - 1) * POR_PAGINA, numero * POR_PAGINA));
+      } else {
+        const total = Math.max(1, data?.totalPages ?? 1);
+        // Si la página pedida ya no existe (por ejemplo, se borró el último anuncio de la última página)
+        if (numero > total) {
+          numero = total;
+          data = await pedirPublicaciones(numero);
+        }
+        setTotalAnuncios(data?.totalElements ?? 0);
+        setTotalPaginas(Math.max(1, data?.totalPages ?? 1));
+        setAnunciosFeed(data?.content ?? []);
+      }
+      setPagina(numero);
     } catch (err) {
       setError(err.message || 'No se pudo cargar el historial.');
     } finally {
@@ -104,7 +170,7 @@ export default function EditorAnuncios() {
     }
   }, []);
 
-  useEffect(() => { cargarFeed(); }, [cargarFeed]);
+  useEffect(() => { cargarFeed(1); }, [cargarFeed]);
 
   // ---------------------------------------------------------------- archivos
   const handleArchivoChange = (e) => {
@@ -228,7 +294,7 @@ export default function EditorAnuncios() {
 
       setExito(esEdicion ? 'Cambios guardados.' : '¡Publicación exitosa!');
       resetFormulario();
-      await cargarFeed();
+      await cargarFeed(esEdicion ? pagina : 1); // un anuncio nuevo queda primero; una edición, en su página
     } catch (err) {
       setError(err.message || 'Error al publicar el anuncio.');
     } finally {
@@ -245,7 +311,7 @@ export default function EditorAnuncios() {
       const res = await fetch(`${API_URL}/publicaciones/${id}`, { method: 'DELETE', headers: authHeaders() });
       if (!res.ok) throw new Error(await leerError(res));
       await res.text(); // la respuesta es texto, no JSON
-      setAnunciosFeed((prev) => prev.filter((a) => a.id !== id));
+      await cargarFeed(pagina); // recarga la página actual (si quedó vacía, vuelve a la anterior)
       if (idEdicion === id) resetFormulario();
       setExito('Anuncio eliminado.');
     } catch (err) {
@@ -253,8 +319,14 @@ export default function EditorAnuncios() {
     }
   };
 
+  const cambiarPagina = async (_, nueva) => {
+    await cargarFeed(nueva);
+    historialRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const adjunto = archivo || imagen;
   const nombreCarrera = (id) => carreras.find((c) => c.id === id)?.nombre ?? id;
+  const abrirImagen = (anuncio) => setImagenAbierta({ url: anuncio.imagenUrl, titulo: anuncio.titulo });
 
   return (
     <Box>
@@ -390,7 +462,7 @@ export default function EditorAnuncios() {
         </CardContent>
       </Card>
 
-      <Box sx={{ mb: 3 }}>
+      <Box ref={historialRef} sx={{ mb: 3, scrollMarginTop: 16 }}>
         <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#0f172a', letterSpacing: '-0.02em', mb: 1 }}>
           Historial de Anuncios Publicados
         </Typography>
@@ -407,7 +479,7 @@ export default function EditorAnuncios() {
         </Typography>
       )}
 
-      {anunciosFeed.map((anuncio) => {
+      {!cargandoFeed && anunciosFeed.map((anuncio) => {
         const vencido = anuncio.fechaExpiracion && new Date(anuncio.fechaExpiracion) < new Date();
         return (
           <Card key={anuncio.id} sx={{ borderRadius: 2.5, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.05)', mb: 3, opacity: vencido ? 0.65 : 1, '&:hover': { boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.07)' } }}>
@@ -432,7 +504,19 @@ export default function EditorAnuncios() {
               <Typography variant="body2" sx={{ color: '#475569', mb: 2, lineHeight: 1.65, whiteSpace: 'pre-line' }}>{anuncio.mensaje}</Typography>
 
               {anuncio.imagenUrl && (
-                <Box component="img" src={anuncio.imagenUrl} alt={anuncio.titulo} sx={{ maxWidth: '100%', maxHeight: 280, borderRadius: 1.5, mb: 2, display: 'block' }} />
+                <Box
+                  component="img"
+                  src={anuncio.imagenUrl}
+                  alt={anuncio.titulo}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => abrirImagen(anuncio)}
+                  onKeyDown={(e) => e.key === 'Enter' && abrirImagen(anuncio)}
+                  sx={{
+                    maxWidth: '100%', maxHeight: 280, borderRadius: 1.5, mb: 2, display: 'block',
+                    cursor: 'zoom-in', transition: 'opacity 0.15s', '&:hover': { opacity: 0.92 }
+                  }}
+                />
               )}
               {anuncio.archivoUrl && (
                 <Link href={anuncio.archivoUrl} target="_blank" rel="noopener noreferrer" underline="hover" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mb: 2, fontSize: '0.875rem' }}>
@@ -454,6 +538,66 @@ export default function EditorAnuncios() {
           </Card>
         );
       })}
+
+      {/* PAGINACIÓN */}
+      {totalPaginas > 1 && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, mt: 1, mb: 2 }}>
+          <Pagination
+            count={totalPaginas}
+            page={pagina}
+            onChange={cambiarPagina}
+            disabled={cargandoFeed}
+            shape="rounded"
+            siblingCount={0}
+            sx={{
+              '& .MuiPaginationItem-root': { fontWeight: 600, color: '#475569' },
+              '& .MuiPaginationItem-root.Mui-selected': { bgcolor: '#f7a600', color: '#fff' },
+              '& .MuiPaginationItem-root.Mui-selected:hover': { bgcolor: '#bc7e01' }
+            }}
+          />
+          <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 500 }}>
+            Página {pagina} de {totalPaginas} · {totalAnuncios} anuncios en total
+          </Typography>
+        </Box>
+      )}
+
+      {/* VISOR DE IMAGEN */}
+      <Dialog
+        open={Boolean(imagenAbierta)}
+        onClose={() => setImagenAbierta(null)}
+        maxWidth="lg"
+        PaperProps={{ sx: { bgcolor: 'transparent', boxShadow: 'none', m: 1 } }}
+      >
+        <Box sx={{ position: 'absolute', top: 8, right: 8, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<DownloadIcon />}
+            onClick={() => descargarImagen(imagenAbierta.url, imagenAbierta.titulo)}
+            sx={{
+              bgcolor: 'rgba(0,0,0,0.55)', color: '#fff', textTransform: 'none', fontWeight: 600,
+              boxShadow: 'none', '&:hover': { bgcolor: 'rgba(0,0,0,0.75)', boxShadow: 'none' }
+            }}
+          >
+            Descargar
+          </Button>
+          <IconButton
+            aria-label="Cerrar imagen"
+            onClick={() => setImagenAbierta(null)}
+            sx={{ bgcolor: 'rgba(0,0,0,0.55)', color: '#fff', '&:hover': { bgcolor: 'rgba(0,0,0,0.75)' } }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </Box>
+        {imagenAbierta && (
+          <Box
+            component="img"
+            src={imagenAbierta.url}
+            alt={imagenAbierta.titulo}
+            sx={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: 1, display: 'block' }}
+          />
+        )}
+      </Dialog>
     </Box>
   );
 }

@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box, Container, Typography, Card, CardContent, Button, Chip, Divider, Paper,
-  Alert, CircularProgress, Link, Dialog, IconButton
+  Alert, CircularProgress, Link, Dialog, IconButton, Pagination
 } from '@mui/material';
 import {
-  Logout, School, FiberManualRecord, AttachFile, Refresh, Close, Download
+  Logout, School, FiberManualRecord, AttachFile, Refresh, Close, Download, AdminPanelSettings
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
 // En .env: VITE_API_URL=https://for-upc-backend.onrender.com
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+
+// ⚠️ Ruta del panel de administración en tu router: cambiala si usás otra
+const RUTA_PANEL_ADMIN = '/admin';
 
 // ------------------------------------------------------------------ helpers
 class ApiError extends Error {
@@ -27,6 +30,7 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   const token = localStorage.getItem('token');
   const res = await fetch(API + path, {
     method,
+    cache: 'no-store', // siempre datos frescos, nunca una copia guardada por el navegador
     headers: {
       ...(auth && token ? { Authorization: `Bearer ${token}` } : {}),
       ...(body ? { 'Content-Type': 'application/json' } : {})
@@ -35,6 +39,24 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   });
   if (!res.ok) throw new ApiError(res.status, mensajePorEstado(res.status, await res.text()));
   return res.json();
+}
+
+// El backend pagina (máx. 100 por página) pero NO filtra por carrera/año del alumno: ese filtro
+// se hace acá. Por eso se traen todas las páginas, se filtra y recién después se pagina en pantalla.
+// Si se paginara directo en el servidor, un alumno vería páginas incompletas o vacías.
+const POR_PAGINA = 5;        // publicaciones que se muestran por página en pantalla
+const TAM_PAGINA_API = 100;  // tamaño de página que se pide al backend (máximo permitido)
+const MAX_PAGINAS_API = 20;  // tope de seguridad contra bucles
+
+async function cargarTodasLasPublicaciones() {
+  const todas = [];
+  for (let page = 0; page < MAX_PAGINAS_API; page++) {
+    const data = await request(`/publicaciones?page=${page}&size=${TAM_PAGINA_API}`, { auth: false });
+    if (Array.isArray(data)) return data; // respuesta sin paginar (array simple)
+    todas.push(...(data?.content ?? []));
+    if (page + 1 >= (data?.totalPages ?? 1)) break;
+  }
+  return todas;
 }
 
 const tiempoRelativo = (iso) => {
@@ -97,6 +119,7 @@ export default function VistaForo() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [imagenAbierta, setImagenAbierta] = useState(null); // { url, titulo }
+  const [pagina, setPagina] = useState(1); // página actual del feed (empieza en 1)
 
   const handleCerrarSesion = useCallback(() => {
     localStorage.removeItem('token');
@@ -110,34 +133,58 @@ export default function VistaForo() {
   }, [handleCerrarSesion]);
 
   // ------------------------------------------------------- carga principal
-  const cargar = useCallback(async () => {
-    setCargando(true);
-    setError('');
+  // silencioso = true: refresca sin spinner ni cartel de error (para el refresco automático)
+  const cargar = useCallback(async ({ silencioso = false } = {}) => {
+    if (!silencioso) {
+      setCargando(true);
+      setError('');
+    }
     try {
       const [p, pubs] = await Promise.all([
         request('/usuarios/me'),
-        request('/publicaciones?size=100', { auth: false }) // lectura pública (máx. 100 por página)
+        cargarTodasLasPublicaciones() // lectura pública: junta todas las páginas del backend
       ]);
       setPerfil(p);
-      setPublicaciones(Array.isArray(pubs) ? pubs : (pubs?.content ?? []));
+      setPublicaciones(pubs);
     } catch (err) {
+      if (silencioso) {
+        if (err.status === 401) handleCerrarSesion(); // sesión vencida: igual se cierra
+        return; // cualquier otro fallo: se conserva lo que ya se está mostrando
+      }
       if (err instanceof TypeError) {
         setError(`No se pudo conectar con ${API}. Revisá que el backend esté corriendo.`);
       } else {
         manejarError(err, setError);
       }
     } finally {
-      setCargando(false);
+      if (!silencioso) setCargando(false);
     }
-  }, [manejarError]);
+  }, [manejarError, handleCerrarSesion]);
 
   useEffect(() => {
     if (!localStorage.getItem('token')) { navigate('/'); return; }
     cargar();
   }, [cargar, navigate]);
 
+  // Refresco automático: si el administrador cambia los destinatarios de un anuncio,
+  // el alumno deja de verlo sin tener que apretar "Actualizar".
+  useEffect(() => {
+    const refrescar = () => {
+      if (document.visibilityState === 'visible') cargar({ silencioso: true });
+    };
+    const intervalo = setInterval(refrescar, 60000); // cada 60 segundos
+    document.addEventListener('visibilitychange', refrescar); // al volver a la pestaña
+    window.addEventListener('focus', refrescar);
+    return () => {
+      clearInterval(intervalo);
+      document.removeEventListener('visibilitychange', refrescar);
+      window.removeEventListener('focus', refrescar);
+    };
+  }, [cargar]);
+
   // --------------------------------------------------------------- filtrado
   const esEstudiante = perfil?.rol === 'ESTUDIANTE';
+  const esAdmin = perfil?.rol === 'ADMINISTRADOR';
   const inscripciones = useMemo(() => ordenarInscripciones(perfil?.inscripciones), [perfil]);
 
   const feed = useMemo(() => {
@@ -155,6 +202,17 @@ export default function VistaForo() {
       .filter((p) => !esEstudiante || p.propios.length > 0)
       .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
   }, [publicaciones, inscripciones, esEstudiante]);
+
+  // Paginación en pantalla (sobre el feed ya filtrado)
+  const totalPaginas = Math.max(1, Math.ceil(feed.length / POR_PAGINA));
+  const paginaActual = Math.min(pagina, totalPaginas); // si el feed se achica al refrescar, no queda una página vacía
+  const desde = (paginaActual - 1) * POR_PAGINA;
+  const feedPagina = feed.slice(desde, desde + POR_PAGINA);
+
+  const cambiarPagina = (_, nueva) => {
+    setPagina(nueva);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const resumenCarreras = inscripciones.length
     ? inscripciones.map((i) => `${i.carrera} • ${i.numero}° Año`).join('  /  ')
@@ -184,7 +242,13 @@ export default function VistaForo() {
             {textoEncabezado}
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          {esAdmin && (
+            <Button variant="contained" size="small" startIcon={<AdminPanelSettings />} onClick={() => navigate(RUTA_PANEL_ADMIN)}
+              sx={{ bgcolor: '#f7a600', color: '#fff', textTransform: 'none', fontWeight: 700, boxShadow: 'none', '&:hover': { bgcolor: '#bc7e01', boxShadow: 'none' } }}>
+              Panel de Administración
+            </Button>
+          )}
           <Button variant="outlined" size="small" startIcon={<Logout />} onClick={handleCerrarSesion}
             sx={{ color: '#475569', borderColor: '#cbd5e1', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#94a3b8', bgcolor: '#f1f5f9' } }}>
             Cerrar Sesión
@@ -212,7 +276,7 @@ export default function VistaForo() {
                 sx={{ bgcolor: '#ecfdf5', color: '#065f46', fontWeight: 600, border: '1px solid #a7f3d0' }}
               />
             )}
-            <Button size="small" startIcon={<Refresh />} onClick={cargar} disabled={cargando} sx={{ textTransform: 'none', fontWeight: 600 }}>
+            <Button size="small" startIcon={<Refresh />} onClick={() => cargar()} disabled={cargando} sx={{ textTransform: 'none', fontWeight: 600 }}>
               Actualizar
             </Button>
           </Box>
@@ -223,7 +287,7 @@ export default function VistaForo() {
         {cargando && <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>}
 
         {/* TARJETAS DE COMUNICADOS */}
-        {!cargando && feed.map((p) => (
+        {!cargando && feedPagina.map((p) => (
           <Card key={p.id} sx={{ borderRadius: 2.5, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.05)', mb: 3, '&:hover': { boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.07)' } }}>
             <CardContent sx={{ p: { xs: 2.5, sm: 3 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 1.5 }}>
@@ -279,13 +343,31 @@ export default function VistaForo() {
           </Card>
         ))}
 
+        {/* PAGINACIÓN */}
+        {!cargando && totalPaginas > 1 && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1, mb: 2 }}>
+            <Pagination
+              count={totalPaginas}
+              page={paginaActual}
+              onChange={cambiarPagina}
+              shape="rounded"
+              siblingCount={0}
+              sx={{
+                '& .MuiPaginationItem-root': { fontWeight: 600, color: '#475569' },
+                '& .MuiPaginationItem-root.Mui-selected': { bgcolor: '#f7a600', color: '#fff' },
+                '& .MuiPaginationItem-root.Mui-selected:hover': { bgcolor: '#bc7e01' }
+              }}
+            />
+          </Box>
+        )}
+
         {/* FIN DE FEED */}
         {!cargando && (
           <Paper sx={{ p: 3, borderRadius: 2, textAlign: 'center', bgcolor: 'transparent', boxShadow: 'none' }}>
             <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 500 }}>
               {feed.length === 0
                 ? (esEstudiante ? 'Todavía no hay publicaciones para tu carrera y año.' : 'Todavía no hay publicaciones.')
-                : 'No hay más publicaciones recientes en tu feed académico.'}
+                : `Mostrando ${desde + 1}–${desde + feedPagina.length} de ${feed.length} publicaciones`}
             </Typography>
           </Paper>
         )}

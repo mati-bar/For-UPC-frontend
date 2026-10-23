@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   Box,
@@ -23,6 +22,7 @@ import SchoolRoundedIcon from '@mui/icons-material/SchoolRounded';
 import PeopleAltRoundedIcon from '@mui/icons-material/PeopleAltRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import AdminPanelSettingsRoundedIcon from '@mui/icons-material/AdminPanelSettingsRounded';
+import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import { useNavigate, useSearchParams } from 'react-router-dom';
  
 import EditorAnuncios from './EditorAnuncios';
@@ -31,6 +31,9 @@ import GestionAlumnos from './GestionAlumnos';
 import logoUPC from './assets/logo-sede-laboulaye.png';
  
 const anchoMenu = 250;
+
+// ⚠️ Ruta del feed (VistaForo) en tu router: cambiala si usás otra
+const RUTA_FEED = '/feed';
  
 // Vistas permitidas en la URL (?vista=...). Cualquier otro valor cae en 'inicio'
 const VISTAS_VALIDAS = ['inicio', 'editor', 'carreras', 'alumnos'];
@@ -48,6 +51,7 @@ export default function PanelAdmin() {
   };
  
   const handleCerrarSesion = () => {
+    localStorage.removeItem('token'); // sin esto el JWT quedaba guardado después de salir
     navigate('/');
   };
  
@@ -200,29 +204,52 @@ export default function PanelAdmin() {
               </Box>
             </Box>
  
-            {/* Botón Cerrar Sesión */}
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<LogoutRoundedIcon />}
-              onClick={handleCerrarSesion}
-              sx={{
-                color: '#475569',
-                borderColor: '#cbd5e1',
-                textTransform: 'none',
-                fontWeight: 600,
-                fontSize: '0.82rem',
-                borderRadius: 2,
-                px: 1.75,
-                py: 0.6,
-                '&:hover': {
-                  borderColor: '#94a3b8',
-                  bgcolor: '#f1f5f9',
-                },
-              }}
-            >
-              Cerrar Sesión
-            </Button>
+            {/* Botones de la derecha: volver al feed y cerrar sesión */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<ArrowBackRoundedIcon />}
+                onClick={() => navigate(RUTA_FEED)}
+                sx={{
+                  bgcolor: '#f7a600',
+                  color: '#ffffff',
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  borderRadius: 2,
+                  px: 1.75,
+                  py: 0.6,
+                  boxShadow: 'none',
+                  '&:hover': { bgcolor: '#bc7e01', boxShadow: 'none' },
+                }}
+              >
+                Volver al Feed
+              </Button>
+
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<LogoutRoundedIcon />}
+                onClick={handleCerrarSesion}
+                sx={{
+                  color: '#475569',
+                  borderColor: '#cbd5e1',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.82rem',
+                  borderRadius: 2,
+                  px: 1.75,
+                  py: 0.6,
+                  '&:hover': {
+                    borderColor: '#94a3b8',
+                    bgcolor: '#f1f5f9',
+                  },
+                }}
+              >
+                Cerrar Sesión
+              </Button>
+            </Box>
           </Toolbar>
         </AppBar>
  
