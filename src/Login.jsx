@@ -208,7 +208,13 @@ export default function Login() {
                   <Typography variant="body2" color="text.secondary">Ingresá con tu correo institucional para acceder a las novedades de tu carrera.</Typography>
                   <TextField label="Correo electrónico" type="email" fullWidth required size="small" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} />
                   <TextField label="Contraseña" type="password" fullWidth required size="small" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />
-                  <Typography variant="body2" component="a" href="#recuperar" onClick={(e) => { e.preventDefault(); alert("Próximamente: Sistema de recuperación de contraseña."); }} sx={{ textAlign: 'right', color: '#000000', textDecoration: 'none', fontWeight: 'medium', '&:hover': { textDecoration: 'underline' }, mt: -1 }}>
+                  <Typography 
+                    variant="body2" 
+                    component="a" 
+                    href="#recuperar" 
+                    onClick={(e) => { e.preventDefault(); navigate('/olvide-password'); }} 
+                    sx={{ textAlign: 'right', color: '#000000', textDecoration: 'none', fontWeight: 'medium', '&:hover': { textDecoration: 'underline' }, mt: -1 }}
+                  >
                     ¿Olvidaste tu contraseña?
                   </Typography>
                   <Button type="submit" disabled={loading} variant="contained" size="large" sx={{ bgcolor: '#f7a600', '&:hover': { bgcolor: '#bc7e01' }, py: 1.5, fontWeight: 'bold', color: '#ffffff' }}>
