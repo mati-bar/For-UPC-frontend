@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box, Container, Typography, Card, CardContent, Button, Chip, Divider, Paper,
-  Alert, CircularProgress, Link
+  Alert, CircularProgress, Link, Dialog, IconButton
 } from '@mui/material';
 import {
-  Logout, School, FiberManualRecord, AttachFile, Refresh
+  Logout, School, FiberManualRecord, AttachFile, Refresh, Close, Download
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
-const API = 'http://localhost:8080';
+// En .env: VITE_API_URL=https://for-upc-backend.onrender.com
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 // ------------------------------------------------------------------ helpers
 class ApiError extends Error {
@@ -55,6 +56,35 @@ const destinosDe = (p) => {
   return [];
 };
 
+// Nombre de archivo a partir del título del anuncio: "Inscripciones abiertas" -> inscripciones-abiertas.jpg
+const nombreArchivo = (url, titulo) => {
+  const ext = (url.split('?')[0].match(/\.(png|jpe?g|gif|webp|svg)$/i) || [])[1] || 'jpg';
+  const base = (titulo || 'imagen')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
+  return `${base || 'imagen'}.${ext}`;
+};
+
+// El atributo "download" se ignora en imágenes de otro dominio (Supabase), por eso se
+// baja el archivo como blob. Si el servidor no lo permite, se abre en una pestaña nueva.
+async function descargarImagen(url, titulo) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    const blob = await res.blob();
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = nombreArchivo(url, titulo);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(href);
+  } catch {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}
+
 const ordenarInscripciones = (insc = []) =>
   [...insc].sort((a, b) => a.carrera.localeCompare(b.carrera) || a.numero - b.numero);
 
@@ -66,7 +96,7 @@ export default function VistaForo() {
   const [publicaciones, setPublicaciones] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
-
+  const [imagenAbierta, setImagenAbierta] = useState(null); // { url, titulo }
 
   const handleCerrarSesion = useCallback(() => {
     localStorage.removeItem('token');
@@ -86,7 +116,7 @@ export default function VistaForo() {
     try {
       const [p, pubs] = await Promise.all([
         request('/usuarios/me'),
-        request('/publicaciones', { auth: false }) // lectura pública
+        request('/publicaciones?size=100', { auth: false }) // lectura pública (máx. 100 por página)
       ]);
       setPerfil(p);
       setPublicaciones(Array.isArray(pubs) ? pubs : (pubs?.content ?? []));
@@ -136,6 +166,8 @@ export default function VistaForo() {
     : esEstudiante
       ? `${perfil.nombre} ${perfil.apellido} — ${resumenCarreras}`
       : `${perfil.nombre} ${perfil.apellido}`;
+
+  const abrirImagen = (p) => setImagenAbierta({ url: p.imagenUrl, titulo: p.titulo });
 
   // ------------------------------------------------------------------ vista
   return (
@@ -218,7 +250,19 @@ export default function VistaForo() {
               </Typography>
 
               {p.imagenUrl && (
-                <Box component="img" src={p.imagenUrl} alt={p.titulo} sx={{ maxWidth: '100%', maxHeight: 320, borderRadius: 1.5, mb: 2, display: 'block' }} />
+                <Box
+                  component="img"
+                  src={p.imagenUrl}
+                  alt={p.titulo}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => abrirImagen(p)}
+                  onKeyDown={(e) => e.key === 'Enter' && abrirImagen(p)}
+                  sx={{
+                    maxWidth: '100%', maxHeight: 320, borderRadius: 1.5, mb: 2, display: 'block',
+                    cursor: 'zoom-in', transition: 'opacity 0.15s', '&:hover': { opacity: 0.92 }
+                  }}
+                />
               )}
               {p.archivoUrl && (
                 <Link href={p.archivoUrl} target="_blank" rel="noopener noreferrer" underline="hover"
@@ -246,6 +290,44 @@ export default function VistaForo() {
           </Paper>
         )}
       </Container>
+
+      {/* VISOR DE IMAGEN */}
+      <Dialog
+        open={Boolean(imagenAbierta)}
+        onClose={() => setImagenAbierta(null)}
+        maxWidth="lg"
+        PaperProps={{ sx: { bgcolor: 'transparent', boxShadow: 'none', m: 1 } }}
+      >
+        <Box sx={{ position: 'absolute', top: 8, right: 8, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<Download />}
+            onClick={() => descargarImagen(imagenAbierta.url, imagenAbierta.titulo)}
+            sx={{
+              bgcolor: 'rgba(0,0,0,0.55)', color: '#fff', textTransform: 'none', fontWeight: 600,
+              boxShadow: 'none', '&:hover': { bgcolor: 'rgba(0,0,0,0.75)', boxShadow: 'none' }
+            }}
+          >
+            Descargar
+          </Button>
+          <IconButton
+            aria-label="Cerrar imagen"
+            onClick={() => setImagenAbierta(null)}
+            sx={{ bgcolor: 'rgba(0,0,0,0.55)', color: '#fff', '&:hover': { bgcolor: 'rgba(0,0,0,0.75)' } }}
+          >
+            <Close />
+          </IconButton>
+        </Box>
+        {imagenAbierta && (
+          <Box
+            component="img"
+            src={imagenAbierta.url}
+            alt={imagenAbierta.titulo}
+            sx={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: 1, display: 'block' }}
+          />
+        )}
+      </Dialog>
 
     </Box>
   );
