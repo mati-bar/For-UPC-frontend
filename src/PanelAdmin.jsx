@@ -32,7 +32,7 @@ import logoUPC from './assets/logo-sede-laboulaye.png';
  
 const anchoMenu = 250;
 
-// ⚠️ Ruta del feed (VistaForo) en tu router: cambiala si usás otra
+// Ruta del feed, definida en App.jsx
 const RUTA_FEED = '/feed';
  
 // Vistas permitidas en la URL (?vista=...). Cualquier otro valor cae en 'inicio'
