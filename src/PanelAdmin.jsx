@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React from 'react';
 import {
   Box,
   Drawer,
@@ -22,33 +23,44 @@ import SchoolRoundedIcon from '@mui/icons-material/SchoolRounded';
 import PeopleAltRoundedIcon from '@mui/icons-material/PeopleAltRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import AdminPanelSettingsRoundedIcon from '@mui/icons-material/AdminPanelSettingsRounded';
-import { useNavigate } from 'react-router-dom';
-
+import { useNavigate, useSearchParams } from 'react-router-dom';
+ 
 import EditorAnuncios from './EditorAnuncios';
 import GestionCarreras from './GestionCarreras';
 import GestionAlumnos from './GestionAlumnos';
 import logoUPC from './assets/logo-sede-laboulaye.png';
-
+ 
 const anchoMenu = 250;
-
+ 
+// Vistas permitidas en la URL (?vista=...). Cualquier otro valor cae en 'inicio'
+const VISTAS_VALIDAS = ['inicio', 'editor', 'carreras', 'alumnos'];
+ 
 export default function PanelAdmin() {
-  const [vistaActiva, setVistaActiva] = useState('inicio');
   const navigate = useNavigate();
-
+ 
+  // La vista activa se guarda en la URL, así sobrevive a la recarga (F5)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const vistaParam = searchParams.get('vista');
+  const vistaActiva = VISTAS_VALIDAS.includes(vistaParam) ? vistaParam : 'inicio';
+ 
+  const setVistaActiva = (vista) => {
+    setSearchParams(vista === 'inicio' ? {} : { vista });
+  };
+ 
   const handleCerrarSesion = () => {
     navigate('/');
   };
-
+ 
   // Variable que determina si mostramos el menú lateral
   const mostrarMenu = vistaActiva !== 'inicio';
-
+ 
   const menuItems = [
     { id: 'inicio', label: 'Inicio', icon: <DashboardRoundedIcon fontSize="small" /> },
     { id: 'editor', label: 'Publicar Anuncio', icon: <CampaignRoundedIcon fontSize="small" /> },
     { id: 'carreras', label: 'Gestión de Carreras', icon: <SchoolRoundedIcon fontSize="small" /> },
     { id: 'alumnos', label: 'Gestión de Alumnos', icon: <PeopleAltRoundedIcon fontSize="small" /> },
   ];
-
+ 
   return (
     <Box sx={{ display: 'flex', backgroundColor: '#f8fafc', minHeight: '100vh' }}>
       
@@ -95,7 +107,7 @@ export default function PanelAdmin() {
               Administración
             </Typography>
           </Box>
-
+ 
           {/* LISTADO DE NAVEGACIÓN */}
           <List sx={{ px: 1.5, py: 2 }}>
             {menuItems.map((item) => {
@@ -127,7 +139,7 @@ export default function PanelAdmin() {
                     </ListItemIcon>
                     <ListItemText
                       primary={item.label}
-                      primarytypographyprops={{
+                      primaryTypographyProps={{
                         fontSize: '0.88rem',
                         fontWeight: activo ? 700 : 500,
                       }}
@@ -139,7 +151,7 @@ export default function PanelAdmin() {
           </List>
         </Drawer>
       )}
-
+ 
       {/* ÁREA DE CONTENIDO + APPBAR SUPERIOR */}
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', width: mostrarMenu ? `calc(100% - ${anchoMenu}px)` : '100%' }}>
         
@@ -187,7 +199,7 @@ export default function PanelAdmin() {
                 </Box>
               </Box>
             </Box>
-
+ 
             {/* Botón Cerrar Sesión */}
             <Button
               variant="outlined"
@@ -213,7 +225,7 @@ export default function PanelAdmin() {
             </Button>
           </Toolbar>
         </AppBar>
-
+ 
         {/* CONTENIDO PRINCIPAL */}
         <Box component="main" sx={{ flexGrow: 1, p: { xs: 3, md: 5 } }}>
           {vistaActiva === 'inicio' && (
@@ -234,7 +246,7 @@ export default function PanelAdmin() {
                   Selecciona una sección para gestionar la información académica y los comunicados
                 </Typography>
               </Box>
-
+ 
               <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, flexWrap: 'wrap' }}>
                 {/* Tarjeta 1: Publicar Anuncio */}
                 <Card
@@ -278,7 +290,7 @@ export default function PanelAdmin() {
                     </CardContent>
                   </CardActionArea>
                 </Card>
-
+ 
                 {/* Tarjeta 2: Gestión de Carreras */}
                 <Card
                   sx={{
@@ -321,7 +333,7 @@ export default function PanelAdmin() {
                     </CardContent>
                   </CardActionArea>
                 </Card>
-
+ 
                 {/* Tarjeta 3: Gestión de Alumnos */}
                 <Card
                   sx={{
@@ -367,7 +379,7 @@ export default function PanelAdmin() {
               </Box>
             </Box>
           )}
-
+ 
           {vistaActiva === 'editor' && <EditorAnuncios />}
           {vistaActiva === 'carreras' && <GestionCarreras />}
           {vistaActiva === 'alumnos' && <GestionAlumnos />}
