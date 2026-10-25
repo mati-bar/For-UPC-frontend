@@ -9,7 +9,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 
 // En .env: VITE_API_URL=https://for-upc-backend.onrender.com
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const API = import.meta.env.VITE_API_URL || 'VITE_API_URL';
 
 // ⚠️ Ruta del panel de administración en tu router: cambiala si usás otra
 const RUTA_PANEL_ADMIN = '/admin';

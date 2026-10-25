@@ -9,6 +9,9 @@ import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
 import logoUPC from './assets/logo-sede-laboulaye.png';
 
+// URL base del backend: en Vercel viene de VITE_API_URL, en local usa localhost
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+
 const orangeTheme = createTheme({
   palette: {
     primary: {
@@ -45,7 +48,7 @@ export default function Login() {
 
   // Cargar las carreras al iniciar la pantalla
   useEffect(() => {
-    fetch('http://localhost:8080/carreras')
+    fetch(`${API_URL}/carreras`)
       .then(res => res.json())
       .then(data => setListaCarreras(data))
       .catch(err => console.error("Error al cargar carreras:", err));
@@ -59,21 +62,23 @@ export default function Login() {
 
   // Manejador dinámico para cuando el estudiante elige una carrera en una fila específica
   const handleCarreraChange = async (index, newCarreraId) => {
-    const nuevasSelecciones = [...selecciones];
     // Limpiamos el año previo y actualizamos la carrera
-    nuevasSelecciones[index].carreraId = newCarreraId;
-    nuevasSelecciones[index].anioCarreraId = '';
-    nuevasSelecciones[index].aniosDisponibles = [];
-    setSelecciones(nuevasSelecciones);
+    setSelecciones(prev =>
+      prev.map((s, i) =>
+        i === index
+          ? { ...s, carreraId: newCarreraId, anioCarreraId: '', aniosDisponibles: [] }
+          : s
+      )
+    );
 
     if (newCarreraId) {
       try {
-        const respuesta = await fetch(`http://localhost:8080/carreras/${newCarreraId}/anios`);
+        const respuesta = await fetch(`${API_URL}/carreras/${newCarreraId}/anios`);
         if (respuesta.ok) {
           const aniosData = await respuesta.json();
-          const actualizadas = [...selecciones];
-          actualizadas[index].aniosDisponibles = aniosData;
-          setSelecciones(actualizadas);
+          setSelecciones(prev =>
+            prev.map((s, i) => (i === index ? { ...s, aniosDisponibles: aniosData } : s))
+          );
         }
       } catch (error) {
         console.error("Error al cargar los años:", error);
@@ -82,9 +87,9 @@ export default function Login() {
   };
 
   const handleAnioChange = (index, newAnioCarreraId) => {
-    const nuevasSelecciones = [...selecciones];
-    nuevasSelecciones[index].anioCarreraId = newAnioCarreraId;
-    setSelecciones(nuevasSelecciones);
+    setSelecciones(prev =>
+      prev.map((s, i) => (i === index ? { ...s, anioCarreraId: newAnioCarreraId } : s))
+    );
   };
 
   const agregarFila = () => {
@@ -104,7 +109,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const respuesta = await fetch('http://localhost:8080/auth/login', {
+      const respuesta = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: loginEmail, password: loginPassword })
@@ -152,7 +157,7 @@ export default function Login() {
     };
 
     try {
-      const respuesta = await fetch('http://localhost:8080/auth/registro', {
+      const respuesta = await fetch(`${API_URL}/auth/registro`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -271,7 +276,7 @@ export default function Login() {
                   ))}
 
                   <Button onClick={agregarFila} sx={{ alignSelf: 'flex-start', mb: 3, textTransform: 'none', fontWeight: 'bold', color: '#f7a600' }}>
-                  + Añadir otra carrera
+                    + Añadir otra carrera
                   </Button>
 
                   <Button type="submit" disabled={loading} variant="contained" size="large" sx={{ bgcolor: '#f7a600', '&:hover': { bgcolor: '#bc7e01' }, py: 1.5, fontWeight: 'bold', color: '#ffffff' }}>

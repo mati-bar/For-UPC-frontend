@@ -12,7 +12,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import DownloadIcon from '@mui/icons-material/Download';
 
 // En .env: VITE_API_URL=https://for-upc-backend.onrender.com
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const API_URL = import.meta.env.VITE_API_URL || 'VITE_API_URL';
 const MAX_IMAGEN = 5 * 1024 * 1024;   // 5 MB
 const MAX_ARCHIVO = 10 * 1024 * 1024; // 10 MB
 const POR_PAGINA = 5;                 // anuncios por página en el historial
