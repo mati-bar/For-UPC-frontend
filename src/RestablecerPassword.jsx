@@ -26,8 +26,7 @@ const handleSubmit = async (e) => {
     setMensaje(null);
 
     try {
-      // Confirmá con Matías si el backend espera { token, password } o { token, nuevaPassword }
-    await api.post('/auth/reset-password', { token, password });
+    await api.post('/auth/reset-password', { token, newPassword: password });
     setMensaje('¡Tu contraseña fue actualizada con éxito!');
       setTimeout(() => navigate('/'), 3000); // Redirige al login después de 3 segundos
     } catch (err) {
