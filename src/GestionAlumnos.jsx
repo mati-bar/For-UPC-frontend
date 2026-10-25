@@ -11,6 +11,7 @@ import api from './api/axiosConfig'; // misma instancia de axios que usa Gestion
 // No figuran en la documentación: si dan 404, hay que crearlas en el backend.
 const RUTA_LISTAR = '/usuarios';                 // GET
 const RUTA_ELIMINAR = (id) => `/usuarios/${id}`; // DELETE
+const RUTA_EDITAR = (id) => `/usuarios/${id}`;   // PUT
 
 const POR_PAGINA = 10; // alumnos por página
 
@@ -48,6 +49,7 @@ export default function GestionAlumnos() {
   const [alumnos, setAlumnos] = useState([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [form, setForm] = useState(FORM_VACIO);
+  const [idEdicion, setIdEdicion] = useState(null); // null = alta; si no, id del alumno que se está editando
 
   // Paginación
   const [pagina, setPagina] = useState(1); // página actual (empieza en 1)
@@ -55,7 +57,7 @@ export default function GestionAlumnos() {
   const [totalAlumnos, setTotalAlumnos] = useState(0);
   const tablaRef = useRef(null);
 
-  // Selectores del alta: carreras y, por carrera, un solo año (el registro no permite dos de la misma)
+  // Selectores del formulario: carreras y, por carrera, un solo año (el registro no permite dos de la misma)
   const [carreras, setCarreras] = useState([]);                 // [{id, nombre}]
   const [aniosPorCarrera, setAniosPorCarrera] = useState({});   // {carreraId: [{anioCarreraId, numero}]}
   const [carrerasElegidas, setCarrerasElegidas] = useState([]); // [carreraId]
@@ -65,6 +67,8 @@ export default function GestionAlumnos() {
   const [guardando, setGuardando] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [exitoMsg, setExitoMsg] = useState(null);
+
+  const editando = idEdicion !== null;
 
   // GET /usuarios?page=N&size=10 (page empieza en 0 en el backend).
   // Funciona con los dos formatos posibles:
@@ -118,6 +122,7 @@ export default function GestionAlumnos() {
     setForm(FORM_VACIO);
     setCarrerasElegidas([]);
     setAnioElegido({});
+    setIdEdicion(null);
     setMostrarFormulario(false);
   };
 
@@ -133,7 +138,7 @@ export default function GestionAlumnos() {
     }
   };
 
-  // Botón superior: abre el formulario de alta o lo cierra
+  // Botón superior: abre el formulario de alta o lo cierra (y cancela una edición en curso)
   const handleToggleFormulario = () => {
     if (mostrarFormulario) {
       resetFormulario();
@@ -168,7 +173,39 @@ export default function GestionAlumnos() {
 
   const setCampo = (campo) => (e) => setForm({ ...form, [campo]: e.target.value });
 
-  // POST /auth/registro (crea un estudiante)
+  // Abre el formulario con los datos del alumno para editarlo
+  const handleEditar = async (alumno) => {
+    setErrorMsg(null);
+    setExitoMsg(null);
+    try {
+      await cargarCarreras();
+
+      const inscripciones = alumno.inscripciones ?? [];
+      const idsCarrera = [...new Set(inscripciones.map((i) => i.carreraId))];
+      await Promise.all(idsCarrera.map(cargarAnios));
+
+      // Un solo año por carrera: se toma el de la inscripción de cada una
+      const seleccion = {};
+      inscripciones.forEach((i) => { seleccion[i.carreraId] = i.anioCarreraId; });
+
+      setForm({
+        nombre: alumno.nombre ?? '',
+        apellido: alumno.apellido ?? '',
+        email: alumno.email ?? '',
+        password: '' // vacía = no se cambia la contraseña
+      });
+      setCarrerasElegidas(idsCarrera);
+      setAnioElegido(seleccion);
+      setIdEdicion(alumno.id);
+      setMostrarFormulario(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      console.error('Error al preparar la edición:', error);
+      setErrorMsg(mensajeDeError(error, 'No se pudo cargar el perfil para editar.'));
+    }
+  };
+
+  // POST /auth/registro (alta) o PUT /usuarios/{id} (edición)
   const handleGuardar = async (e) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -182,25 +219,32 @@ export default function GestionAlumnos() {
     if (inscripciones.length < carrerasElegidas.length) {
       return setErrorMsg('Elegí el año de cada carrera seleccionada.');
     }
-    if (form.password.length < 8) {
+    // En el alta la contraseña es obligatoria; al editar solo se valida si se escribió una nueva
+    if ((!editando || form.password) && form.password.length < 8) {
       return setErrorMsg('La contraseña debe tener al menos 8 caracteres.');
     }
 
+    const payload = {
+      nombre: form.nombre.trim(),
+      apellido: form.apellido.trim(),
+      email: form.email.trim(),
+      inscripciones
+    };
+    if (form.password) payload.password = form.password;
+
     setGuardando(true);
     try {
-      await api.post('/auth/registro', {
-        nombre: form.nombre.trim(),
-        apellido: form.apellido.trim(),
-        email: form.email.trim(),
-        password: form.password,
-        inscripciones
-      });
+      if (editando) {
+        await api.put(RUTA_EDITAR(idEdicion), payload);
+      } else {
+        await api.post('/auth/registro', payload);
+      }
       resetFormulario();
-      setExitoMsg('Alumno creado correctamente.');
+      setExitoMsg(editando ? 'Cambios guardados.' : 'Alumno creado correctamente.');
       await cargarAlumnos(pagina, true); // recarga la página actual: la lista refleja lo guardado en el backend
     } catch (error) {
-      console.error('Error al crear alumno:', error);
-      setErrorMsg(mensajeDeError(error, 'No se pudo crear el alumno.'));
+      console.error('Error al guardar alumno:', error);
+      setErrorMsg(mensajeDeError(error, editando ? 'No se pudieron guardar los cambios.' : 'No se pudo crear el alumno.'));
     } finally {
       setGuardando(false);
     }
@@ -214,6 +258,7 @@ export default function GestionAlumnos() {
     setExitoMsg(null);
     try {
       await api.delete(RUTA_ELIMINAR(alumno.id));
+      if (idEdicion === alumno.id) resetFormulario(); // si justo se estaba editando, se cierra el formulario
       setExitoMsg('Alumno eliminado.');
       // Recarga la página actual; si quedó vacía, vuelve a la anterior
       await cargarAlumnos(pagina, true);
@@ -258,7 +303,7 @@ export default function GestionAlumnos() {
         <Card sx={{ mb: 4, borderRadius: 2, border: '2px solid #f7a600', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}>
           <CardContent sx={{ p: 3 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#0B1E3B', mb: 2 }}>
-              Registrar nuevo alumno en el sistema
+              {editando ? 'Editar perfil del alumno' : 'Registrar nuevo alumno en el sistema'}
             </Typography>
             <Box component="form" onSubmit={handleGuardar} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
 
@@ -272,8 +317,18 @@ export default function GestionAlumnos() {
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                 <TextField label="Email" type="email" required size="small" sx={{ flex: 1, minWidth: 200 }}
                   value={form.email} onChange={setCampo('email')} disabled={guardando} />
-                <TextField label="Contraseña (mín. 8 caracteres)" type="password" required size="small" sx={{ flex: 1, minWidth: 200 }}
-                  value={form.password} onChange={setCampo('password')} disabled={guardando} />
+                <TextField
+                  label={editando ? 'Nueva contraseña (opcional, mín. 8)' : 'Contraseña (mín. 8 caracteres)'}
+                  type="password"
+                  required={!editando}
+                  size="small"
+                  sx={{ flex: 1, minWidth: 200 }}
+                  value={form.password}
+                  onChange={setCampo('password')}
+                  disabled={guardando}
+                  autoComplete="new-password"
+                  helperText={editando ? 'Dejala vacía para conservar la actual.' : undefined}
+                />
               </Box>
 
               <FormControl size="small" fullWidth>
@@ -315,15 +370,27 @@ export default function GestionAlumnos() {
                 </FormControl>
               ))}
 
-              <Box>
+              <Box sx={{ display: 'flex', gap: 1.5 }}>
                 <Button
                   type="submit"
                   variant="contained"
                   disabled={guardando}
                   sx={{ bgcolor: '#f7a600', '&:hover': { bgcolor: '#bc7e01' }, color: '#fff', fontWeight: 'bold', height: '40px', textTransform: 'none' }}
                 >
-                  {guardando ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : 'Guardar Alumno'}
+                  {guardando
+                    ? <CircularProgress size={22} sx={{ color: '#fff' }} />
+                    : editando ? 'Guardar Cambios' : 'Guardar Alumno'}
                 </Button>
+                {editando && (
+                  <Button
+                    variant="outlined"
+                    onClick={resetFormulario}
+                    disabled={guardando}
+                    sx={{ color: '#64748b', borderColor: '#cbd5e1', height: '40px', textTransform: 'none', fontWeight: 'bold', '&:hover': { bgcolor: '#f1f5f9', borderColor: '#94a3b8' } }}
+                  >
+                    Cancelar edición
+                  </Button>
+                )}
               </Box>
 
             </Box>
@@ -338,7 +405,7 @@ export default function GestionAlumnos() {
               <TableCell sx={{ fontWeight: 'bold', color: '#0B1E3B' }}>Email</TableCell>
               <TableCell sx={{ fontWeight: 'bold', color: '#0B1E3B' }}>Nombre y Apellido</TableCell>
               <TableCell sx={{ fontWeight: 'bold', color: '#0B1E3B' }}>Carrera</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: 'right', color: '#0B1E3B', width: '15%' }}>Acciones</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: 'right', color: '#0B1E3B', width: '22%' }}>Acciones</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -356,11 +423,23 @@ export default function GestionAlumnos() {
               </TableRow>
             ) : (
               alumnos.map((alumno) => (
-                <TableRow key={alumno.id} hover>
+                <TableRow key={alumno.id} hover selected={alumno.id === idEdicion}>
                   <TableCell>{alumno.email}</TableCell>
                   <TableCell>{alumno.nombre} {alumno.apellido}</TableCell>
                   <TableCell>{carreraDe(alumno)}</TableCell>
-                  <TableCell sx={{ textAlign: 'right' }}>
+                  <TableCell sx={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      sx={{
+                        fontWeight: 'bold', textTransform: 'none', mr: 1,
+                        color: '#f7a600', borderColor: '#f7a600',
+                        '&:hover': { borderColor: '#bc7e01', bgcolor: '#fffbeb', color: '#bc7e01' }
+                      }}
+                      onClick={() => handleEditar(alumno)}
+                    >
+                      Editar
+                    </Button>
                     <Button
                       variant="outlined"
                       color="error"
