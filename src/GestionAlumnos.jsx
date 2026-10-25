@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box, Typography, Button, Paper, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Card, CardContent,
   TextField, FormControl, InputLabel, Select, MenuItem, Checkbox,
-  ListItemText, OutlinedInput, CircularProgress, Alert
+  ListItemText, OutlinedInput, CircularProgress, Alert, Pagination
 } from '@mui/material';
 import api from './api/axiosConfig'; // misma instancia de axios que usa GestionCarreras
 
@@ -11,6 +11,8 @@ import api from './api/axiosConfig'; // misma instancia de axios que usa Gestion
 // No figuran en la documentación: si dan 404, hay que crearlas en el backend.
 const RUTA_LISTAR = '/usuarios';                 // GET
 const RUTA_ELIMINAR = (id) => `/usuarios/${id}`; // DELETE
+
+const POR_PAGINA = 10; // alumnos por página
 
 // El backend puede devolver texto plano o un objeto JSON en los errores
 const mensajeDeError = (error, porDefecto) => {
@@ -33,12 +35,25 @@ const carreraDe = (alumno) =>
     .map((i) => `${i.carrera} (${i.numero}° año)`)
     .join(', ') || '—';
 
+// Si el backend devuelve un Page de Spring ({ content, totalPages, totalElements })
+const esPaginado = (data) => data && !Array.isArray(data) && Array.isArray(data.content);
+
+// Si no está paginado, busca el array en la respuesta ([...] u objeto con un array adentro)
+const extraerLista = (data) =>
+  Array.isArray(data) ? data : Object.values(data ?? {}).find(Array.isArray) ?? [];
+
 const FORM_VACIO = { nombre: '', apellido: '', email: '', password: '' };
 
 export default function GestionAlumnos() {
   const [alumnos, setAlumnos] = useState([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [form, setForm] = useState(FORM_VACIO);
+
+  // Paginación
+  const [pagina, setPagina] = useState(1); // página actual (empieza en 1)
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [totalAlumnos, setTotalAlumnos] = useState(0);
+  const tablaRef = useRef(null);
 
   // Selectores del alta: carreras y, por carrera, un solo año (el registro no permite dos de la misma)
   const [carreras, setCarreras] = useState([]);                 // [{id, nombre}]
@@ -51,26 +66,53 @@ export default function GestionAlumnos() {
   const [errorMsg, setErrorMsg] = useState(null);
   const [exitoMsg, setExitoMsg] = useState(null);
 
-  // GET /usuarios (silencioso = no muestra el spinner de la tabla)
-  const cargarAlumnos = async (silencioso = false) => {
+  // GET /usuarios?page=N&size=10 (page empieza en 0 en el backend).
+  // Funciona con los dos formatos posibles:
+  //  - Backend paginado (Page de Spring): se pide solo la página necesaria.
+  //  - Backend que devuelve la lista completa: se corta acá, en pantalla.
+  // silencioso = true: no muestra el spinner de la tabla.
+  const cargarAlumnos = useCallback(async (paginaPedida = 1, silencioso = false) => {
     try {
       if (!silencioso) setCargando(true);
-      const res = await api.get(RUTA_LISTAR);
-      const data = res.data;
-      // Acepta: [...], { content: [...] } (paginado) u objeto con un array adentro
-      const lista = Array.isArray(data)
-        ? data
-        : data?.content ?? Object.values(data ?? {}).find(Array.isArray) ?? [];
-      setAlumnos(lista);
+
+      const pedir = (n) => api.get(RUTA_LISTAR, { params: { page: n - 1, size: POR_PAGINA } });
+
+      let numero = Math.max(1, paginaPedida);
+      let data = (await pedir(numero)).data;
+
+      if (esPaginado(data)) {
+        const total = Math.max(1, data.totalPages ?? 1);
+        // Si la página pedida ya no existe (por ejemplo, se borró el último alumno de la última página)
+        if (numero > total) {
+          numero = total;
+          data = (await pedir(numero)).data;
+        }
+        setAlumnos(data.content ?? []);
+        setTotalPaginas(Math.max(1, data.totalPages ?? 1));
+        setTotalAlumnos(data.totalElements ?? (data.content ?? []).length);
+      } else {
+        const lista = extraerLista(data);
+        const total = Math.max(1, Math.ceil(lista.length / POR_PAGINA));
+        numero = Math.min(numero, total);
+        setAlumnos(lista.slice((numero - 1) * POR_PAGINA, numero * POR_PAGINA));
+        setTotalPaginas(total);
+        setTotalAlumnos(lista.length);
+      }
+      setPagina(numero);
     } catch (error) {
       console.error('Error al cargar alumnos:', error);
       setErrorMsg(mensajeDeError(error, 'No se pudieron obtener los alumnos.'));
     } finally {
       setCargando(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { cargarAlumnos(); }, []);
+  useEffect(() => { cargarAlumnos(1); }, [cargarAlumnos]);
+
+  const cambiarPagina = async (_, nueva) => {
+    await cargarAlumnos(nueva);
+    tablaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const resetFormulario = () => {
     setForm(FORM_VACIO);
@@ -155,7 +197,7 @@ export default function GestionAlumnos() {
       });
       resetFormulario();
       setExitoMsg('Alumno creado correctamente.');
-      await cargarAlumnos(true); // la lista siempre refleja lo que quedó guardado en el backend
+      await cargarAlumnos(pagina, true); // recarga la página actual: la lista refleja lo guardado en el backend
     } catch (error) {
       console.error('Error al crear alumno:', error);
       setErrorMsg(mensajeDeError(error, 'No se pudo crear el alumno.'));
@@ -172,8 +214,9 @@ export default function GestionAlumnos() {
     setExitoMsg(null);
     try {
       await api.delete(RUTA_ELIMINAR(alumno.id));
-      setAlumnos((prev) => prev.filter((a) => a.id !== alumno.id));
       setExitoMsg('Alumno eliminado.');
+      // Recarga la página actual; si quedó vacía, vuelve a la anterior
+      await cargarAlumnos(pagina, true);
     } catch (error) {
       console.error('Error al eliminar alumno:', error);
       setErrorMsg(mensajeDeError(error, 'No se pudo eliminar al alumno.'));
@@ -181,6 +224,9 @@ export default function GestionAlumnos() {
   };
 
   const nombreCarrera = (id) => carreras.find((c) => c.id === id)?.nombre ?? id;
+
+  const desde = totalAlumnos === 0 ? 0 : (pagina - 1) * POR_PAGINA + 1;
+  const hasta = (pagina - 1) * POR_PAGINA + alumnos.length;
 
   return (
     <Box>
@@ -285,7 +331,7 @@ export default function GestionAlumnos() {
         </Card>
       )}
 
-      <TableContainer component={Paper} sx={{ boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', borderRadius: 2 }}>
+      <TableContainer ref={tablaRef} component={Paper} sx={{ boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', borderRadius: 2, scrollMarginTop: 16 }}>
         <Table>
           <TableHead sx={{ bgcolor: '#f1f5f9' }}>
             <TableRow>
@@ -331,6 +377,29 @@ export default function GestionAlumnos() {
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* PAGINACIÓN */}
+      {!cargando && totalAlumnos > 0 && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, mt: 3, mb: 2 }}>
+          {totalPaginas > 1 && (
+            <Pagination
+              count={totalPaginas}
+              page={pagina}
+              onChange={cambiarPagina}
+              shape="rounded"
+              siblingCount={1}
+              sx={{
+                '& .MuiPaginationItem-root': { fontWeight: 600, color: '#475569' },
+                '& .MuiPaginationItem-root.Mui-selected': { bgcolor: '#f7a600', color: '#fff' },
+                '& .MuiPaginationItem-root.Mui-selected:hover': { bgcolor: '#bc7e01' }
+              }}
+            />
+          )}
+          <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 500 }}>
+            Mostrando {desde}–{hasta} de {totalAlumnos} alumnos
+          </Typography>
+        </Box>
+      )}
     </Box>
   );
 }
