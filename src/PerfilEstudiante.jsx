@@ -4,11 +4,16 @@ import {
   Button, TextField
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { useNavigate } from 'react-router-dom';
 import api from './api/axiosConfig';
 
 // ⚠️ Ruta que el backend tiene que exponer para que el usuario edite su propio perfil.
 // No figura en la documentación: si da 404, hay que crearla en el backend.
 const RUTA_EDITAR_PERFIL = '/usuarios/me'; // PUT { nombre, apellido }
+
+// Ruta del feed en tu router: cambiala si usás otra
+const RUTA_FEED = '/feed';
 
 // El backend puede devolver texto plano o un objeto JSON en los errores
 const mensajeDeError = (error, porDefecto) => {
@@ -24,6 +29,8 @@ const mensajeDeError = (error, porDefecto) => {
 };
 
 export default function Perfil() {
+  const navigate = useNavigate();
+
   const [perfil, setPerfil] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -91,6 +98,20 @@ export default function Perfil() {
     }
   };
 
+  // Botón para volver al feed (se muestra siempre, también si el perfil no carga)
+  const botonVolver = (
+    <Button
+      startIcon={<ArrowBackIcon />}
+      onClick={() => navigate(RUTA_FEED)}
+      sx={{
+        mb: 2, textTransform: 'none', fontWeight: 'bold', color: '#475569',
+        '&:hover': { bgcolor: '#f1f5f9', color: '#0B1E3B' }
+      }}
+    >
+      Volver al feed
+    </Button>
+  );
+
   if (cargando) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 5 }}>
@@ -99,11 +120,20 @@ export default function Perfil() {
     );
   }
 
-  if (errorMsg) return <Alert severity="error" sx={{ mt: 2 }}>{errorMsg}</Alert>;
+  if (errorMsg) {
+    return (
+      <Box sx={{ maxWidth: 600, mx: 'auto', mt: 4 }}>
+        {botonVolver}
+        <Alert severity="error">{errorMsg}</Alert>
+      </Box>
+    );
+  }
   if (!perfil) return null;
 
   return (
-    <Box sx={{ maxWidth: 600, mx: 'auto', mt: 4 }}>
+    <Box sx={{ maxWidth: 600, mx: 'auto', mt: 4, px: { xs: 2, sm: 0 } }}>
+      {botonVolver}
+
       <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#0B1E3B', mb: 3 }}>
         Mi Perfil
       </Typography>
