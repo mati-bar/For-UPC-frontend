@@ -3,15 +3,15 @@ import {
   Box, Typography, Button, Paper, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Card, CardContent,
   TextField, FormControl, InputLabel, Select, MenuItem, Checkbox,
-  ListItemText, OutlinedInput, CircularProgress, Alert, Pagination
+  ListItemText, OutlinedInput, CircularProgress, Alert, Pagination, Chip
 } from '@mui/material';
 import api from './api/axiosConfig'; // misma instancia de axios que usa GestionCarreras
 
 // ⚠️ Rutas que el backend tiene que exponer (solo ADMINISTRADOR).
-// No figuran en la documentación: si dan 404, hay que crearlas en el backend.
+// No figuran en la documentación: si dan 404 o 405, hay que crearlas en el backend.
 const RUTA_LISTAR = '/usuarios';                 // GET
 const RUTA_ELIMINAR = (id) => `/usuarios/${id}`; // DELETE
-const RUTA_EDITAR = (id) => `/usuarios/${id}`;   // PUT
+const RUTA_EDITAR = (id) => `/usuarios/${id}`;   // PUT { nombre, apellido, inscripciones: [{ anioCarreraId }] }
 
 const POR_PAGINA = 10; // alumnos por página
 
@@ -21,6 +21,7 @@ const mensajeDeError = (error, porDefecto) => {
   if (status === 401) return 'Tu sesión venció. Volvé a iniciar sesión.';
   if (status === 403) return 'No tenés permisos de administrador para realizar esta acción.';
   if (status === 404) return `${porDefecto} No se encontró el recurso (la ruta puede no existir en el backend).`;
+  if (status === 405) return `${porDefecto} El backend todavía no permite editar alumnos (falta PUT en esa ruta).`;
   if (status === 409) return 'Ya existe un usuario con ese email.';
   if (!error.response) return 'No se pudo conectar con el servidor. Verificá que el backend esté corriendo.';
 
@@ -49,7 +50,8 @@ export default function GestionAlumnos() {
   const [alumnos, setAlumnos] = useState([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [form, setForm] = useState(FORM_VACIO);
-  const [idEdicion, setIdEdicion] = useState(null); // null = alta; si no, id del alumno que se está editando
+  const [idEdicion, setIdEdicion] = useState(null);               // null = alta; si no, id del alumno que se edita
+  const [alumnoEnEdicion, setAlumnoEnEdicion] = useState(null);   // para mostrar su email, carreras y años (solo lectura)
 
   // Paginación
   const [pagina, setPagina] = useState(1); // página actual (empieza en 1)
@@ -57,7 +59,7 @@ export default function GestionAlumnos() {
   const [totalAlumnos, setTotalAlumnos] = useState(0);
   const tablaRef = useRef(null);
 
-  // Selectores del formulario: carreras y, por carrera, un solo año (el registro no permite dos de la misma)
+  // Selectores del ALTA: carreras y, por carrera, un solo año (el registro no permite dos de la misma)
   const [carreras, setCarreras] = useState([]);                 // [{id, nombre}]
   const [aniosPorCarrera, setAniosPorCarrera] = useState({});   // {carreraId: [{anioCarreraId, numero}]}
   const [carrerasElegidas, setCarrerasElegidas] = useState([]); // [carreraId]
@@ -123,10 +125,11 @@ export default function GestionAlumnos() {
     setCarrerasElegidas([]);
     setAnioElegido({});
     setIdEdicion(null);
+    setAlumnoEnEdicion(null);
     setMostrarFormulario(false);
   };
 
-  // GET /carreras (solo la primera vez que se abre el formulario)
+  // GET /carreras (solo la primera vez que se abre el formulario de alta)
   const cargarCarreras = async () => {
     if (carreras.length > 0) return;
     try {
@@ -173,44 +176,57 @@ export default function GestionAlumnos() {
 
   const setCampo = (campo) => (e) => setForm({ ...form, [campo]: e.target.value });
 
-  // Abre el formulario con los datos del alumno para editarlo
-  const handleEditar = async (alumno) => {
+  // Abre el formulario con los datos del alumno. Solo nombre y apellido son editables;
+  // el email, las carreras y los años se muestran sin posibilidad de cambio.
+  const handleEditar = (alumno) => {
     setErrorMsg(null);
     setExitoMsg(null);
-    try {
-      await cargarCarreras();
-
-      const inscripciones = alumno.inscripciones ?? [];
-      const idsCarrera = [...new Set(inscripciones.map((i) => i.carreraId))];
-      await Promise.all(idsCarrera.map(cargarAnios));
-
-      // Un solo año por carrera: se toma el de la inscripción de cada una
-      const seleccion = {};
-      inscripciones.forEach((i) => { seleccion[i.carreraId] = i.anioCarreraId; });
-
-      setForm({
-        nombre: alumno.nombre ?? '',
-        apellido: alumno.apellido ?? '',
-        email: alumno.email ?? '',
-        password: '' // vacía = no se cambia la contraseña
-      });
-      setCarrerasElegidas(idsCarrera);
-      setAnioElegido(seleccion);
-      setIdEdicion(alumno.id);
-      setMostrarFormulario(true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (error) {
-      console.error('Error al preparar la edición:', error);
-      setErrorMsg(mensajeDeError(error, 'No se pudo cargar el perfil para editar.'));
-    }
+    setForm({
+      nombre: alumno.nombre ?? '',
+      apellido: alumno.apellido ?? '',
+      email: alumno.email ?? '',
+      password: ''
+    });
+    setAlumnoEnEdicion(alumno);
+    setIdEdicion(alumno.id);
+    setMostrarFormulario(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // POST /auth/registro (alta) o PUT /usuarios/{id} (edición)
+  // PUT /usuarios/{id} (edición) o POST /auth/registro (alta)
   const handleGuardar = async (e) => {
     e.preventDefault();
     setErrorMsg(null);
     setExitoMsg(null);
 
+    // ---- EDICIÓN: solo nombre y apellido
+    if (editando) {
+      const nombre = form.nombre.trim();
+      const apellido = form.apellido.trim();
+      if (!nombre || !apellido) {
+        return setErrorMsg('El nombre y el apellido no pueden estar vacíos.');
+      }
+
+      setGuardando(true);
+      try {
+        // El backend exige al menos una inscripción: se reenvían las actuales sin cambios
+        const inscripciones = (alumnoEnEdicion?.inscripciones ?? [])
+          .map((i) => ({ anioCarreraId: i.anioCarreraId }))
+          .filter((i) => i.anioCarreraId != null);
+        await api.put(RUTA_EDITAR(idEdicion), { nombre, apellido, inscripciones });
+        resetFormulario();
+        setExitoMsg('Cambios guardados.');
+        await cargarAlumnos(pagina, true); // recarga la página actual: la lista refleja lo guardado en el backend
+      } catch (error) {
+        console.error('Error al guardar alumno:', error);
+        setErrorMsg(mensajeDeError(error, 'No se pudieron guardar los cambios.'));
+      } finally {
+        setGuardando(false);
+      }
+      return;
+    }
+
+    // ---- ALTA
     if (carrerasElegidas.length === 0) return setErrorMsg('Elegí al menos una carrera.');
     const inscripciones = carrerasElegidas
       .map((cid) => anioElegido[cid])
@@ -219,32 +235,25 @@ export default function GestionAlumnos() {
     if (inscripciones.length < carrerasElegidas.length) {
       return setErrorMsg('Elegí el año de cada carrera seleccionada.');
     }
-    // En el alta la contraseña es obligatoria; al editar solo se valida si se escribió una nueva
-    if ((!editando || form.password) && form.password.length < 8) {
+    if (form.password.length < 8) {
       return setErrorMsg('La contraseña debe tener al menos 8 caracteres.');
     }
 
-    const payload = {
-      nombre: form.nombre.trim(),
-      apellido: form.apellido.trim(),
-      email: form.email.trim(),
-      inscripciones
-    };
-    if (form.password) payload.password = form.password;
-
     setGuardando(true);
     try {
-      if (editando) {
-        await api.put(RUTA_EDITAR(idEdicion), payload);
-      } else {
-        await api.post('/auth/registro', payload);
-      }
+      await api.post('/auth/registro', {
+        nombre: form.nombre.trim(),
+        apellido: form.apellido.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        inscripciones
+      });
       resetFormulario();
-      setExitoMsg(editando ? 'Cambios guardados.' : 'Alumno creado correctamente.');
-      await cargarAlumnos(pagina, true); // recarga la página actual: la lista refleja lo guardado en el backend
+      setExitoMsg('Alumno creado correctamente.');
+      await cargarAlumnos(pagina, true);
     } catch (error) {
-      console.error('Error al guardar alumno:', error);
-      setErrorMsg(mensajeDeError(error, editando ? 'No se pudieron guardar los cambios.' : 'No se pudo crear el alumno.'));
+      console.error('Error al crear alumno:', error);
+      setErrorMsg(mensajeDeError(error, 'No se pudo crear el alumno.'));
     } finally {
       setGuardando(false);
     }
@@ -314,61 +323,91 @@ export default function GestionAlumnos() {
                   value={form.apellido} onChange={setCampo('apellido')} disabled={guardando} />
               </Box>
 
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                <TextField label="Email" type="email" required size="small" sx={{ flex: 1, minWidth: 200 }}
-                  value={form.email} onChange={setCampo('email')} disabled={guardando} />
-                <TextField
-                  label={editando ? 'Nueva contraseña (opcional, mín. 8)' : 'Contraseña (mín. 8 caracteres)'}
-                  type="password"
-                  required={!editando}
-                  size="small"
-                  sx={{ flex: 1, minWidth: 200 }}
-                  value={form.password}
-                  onChange={setCampo('password')}
-                  disabled={guardando}
-                  autoComplete="new-password"
-                  helperText={editando ? 'Dejala vacía para conservar la actual.' : undefined}
-                />
-              </Box>
+              {editando ? (
+                <>
+                  {/* EDICIÓN: email, carreras y años solo se muestran. No hay campo de contraseña. */}
+                  <TextField
+                    label="Email"
+                    size="small"
+                    fullWidth
+                    value={alumnoEnEdicion?.email ?? ''}
+                    disabled
+                    helperText="El email no se puede modificar."
+                  />
 
-              <FormControl size="small" fullWidth>
-                <InputLabel>Carreras</InputLabel>
-                <Select
-                  multiple
-                  value={carrerasElegidas}
-                  onChange={(e) => handleCambiarCarreras(e.target.value)}
-                  input={<OutlinedInput label="Carreras" />}
-                  renderValue={(sel) => sel.map(nombreCarrera).join(', ')}
-                  disabled={guardando}
-                >
-                  {carreras.map((c) => (
-                    <MenuItem key={c.id} value={c.id}>
-                      <Checkbox
-                        checked={carrerasElegidas.includes(c.id)}
-                        sx={{ color: '#f7a600', '&.Mui-checked': { color: '#f7a600' } }}
-                      />
-                      <ListItemText primary={c.nombre} />
-                    </MenuItem>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block', mb: 0.75 }}>
+                      Carreras y año de inscripción
+                    </Typography>
+                    {(alumnoEnEdicion?.inscripciones ?? []).length > 0 ? (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                        {alumnoEnEdicion.inscripciones.map((i, idx) => (
+                          <Chip
+                            key={idx}
+                            size="small"
+                            label={`${i.carrera} • ${i.numero}° Año`}
+                            sx={{ bgcolor: '#f1f5f9', color: '#334155', fontWeight: 600, border: '1px solid #e2e8f0' }}
+                          />
+                        ))}
+                      </Box>
+                    ) : (
+                      <Typography variant="body2" sx={{ color: '#94a3b8' }}>Sin carreras asignadas.</Typography>
+                    )}
+                    <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block', mt: 0.75 }}>
+                      Solo se pueden editar el nombre y el apellido.
+                    </Typography>
+                  </Box>
+                </>
+              ) : (
+                <>
+                  {/* ALTA: email, contraseña, carreras y años */}
+                  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                    <TextField label="Email" type="email" required size="small" sx={{ flex: 1, minWidth: 200 }}
+                      value={form.email} onChange={setCampo('email')} disabled={guardando} />
+                    <TextField label="Contraseña (mín. 8 caracteres)" type="password" required size="small" sx={{ flex: 1, minWidth: 200 }}
+                      value={form.password} onChange={setCampo('password')} disabled={guardando} autoComplete="new-password" />
+                  </Box>
+
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>Carreras</InputLabel>
+                    <Select
+                      multiple
+                      value={carrerasElegidas}
+                      onChange={(e) => handleCambiarCarreras(e.target.value)}
+                      input={<OutlinedInput label="Carreras" />}
+                      renderValue={(sel) => sel.map(nombreCarrera).join(', ')}
+                      disabled={guardando}
+                    >
+                      {carreras.map((c) => (
+                        <MenuItem key={c.id} value={c.id}>
+                          <Checkbox
+                            checked={carrerasElegidas.includes(c.id)}
+                            sx={{ color: '#f7a600', '&.Mui-checked': { color: '#f7a600' } }}
+                          />
+                          <ListItemText primary={c.nombre} />
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  {/* Un solo año por carrera */}
+                  {carrerasElegidas.map((cid) => (
+                    <FormControl size="small" fullWidth key={cid}>
+                      <InputLabel>{`Año - ${nombreCarrera(cid)}`}</InputLabel>
+                      <Select
+                        value={anioElegido[cid] ?? ''}
+                        label={`Año - ${nombreCarrera(cid)}`}
+                        onChange={(e) => setAnioElegido({ ...anioElegido, [cid]: e.target.value })}
+                        disabled={guardando}
+                      >
+                        {(aniosPorCarrera[cid] || []).map((a) => (
+                          <MenuItem key={a.anioCarreraId} value={a.anioCarreraId}>{a.numero}° año</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   ))}
-                </Select>
-              </FormControl>
-
-              {/* Un solo año por carrera */}
-              {carrerasElegidas.map((cid) => (
-                <FormControl size="small" fullWidth key={cid}>
-                  <InputLabel>{`Año - ${nombreCarrera(cid)}`}</InputLabel>
-                  <Select
-                    value={anioElegido[cid] ?? ''}
-                    label={`Año - ${nombreCarrera(cid)}`}
-                    onChange={(e) => setAnioElegido({ ...anioElegido, [cid]: e.target.value })}
-                    disabled={guardando}
-                  >
-                    {(aniosPorCarrera[cid] || []).map((a) => (
-                      <MenuItem key={a.anioCarreraId} value={a.anioCarreraId}>{a.numero}° año</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              ))}
+                </>
+              )}
 
               <Box sx={{ display: 'flex', gap: 1.5 }}>
                 <Button
