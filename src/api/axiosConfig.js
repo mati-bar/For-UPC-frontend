@@ -5,7 +5,7 @@ import axios from 'axios'
 const API_URL =
   import.meta.env.VITE_AUTH_API_URL ||
   import.meta.env.VITE_API_URL ||
-  'VITE_API_URL'
+  'https://for-upc-backend.onrender.com'
 
 // El login está en "/" (ver App.jsx)
 const RUTA_LOGIN = '/'

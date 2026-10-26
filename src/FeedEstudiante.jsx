@@ -9,7 +9,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 
 // En .env: VITE_API_URL=https://for-upc-backend.onrender.com
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const API = import.meta.env.VITE_API_URL || 'https://for-upc-backend.onrender.com';
 
 // ⚠️ Rutas de tu router: cambialas si usás otras
 const RUTA_PANEL_ADMIN = '/admin';
@@ -278,13 +278,6 @@ export default function VistaForo() {
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {!cargando && !error && (
-              <Chip
-                icon={<FiberManualRecord sx={{ fontSize: '10px !important', color: '#10b981 !important' }} />}
-                label="Feed Actualizado" size="small"
-                sx={{ bgcolor: '#ecfdf5', color: '#065f46', fontWeight: 600, border: '1px solid #a7f3d0' }}
-              />
-            )}
             <Button size="small" startIcon={<Refresh />} onClick={() => cargar()} disabled={cargando} sx={{ textTransform: 'none', fontWeight: 600 }}>
               Actualizar
             </Button>

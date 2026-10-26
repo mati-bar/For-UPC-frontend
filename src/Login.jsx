@@ -12,7 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import logoUPC from './assets/logo-sede-laboulaye.png';
 
 // URL base del backend: en Vercel viene de VITE_API_URL, en local usa localhost
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const API_URL = import.meta.env.VITE_API_URL || 'https://for-upc-backend.onrender.com';
 
 const orangeTheme = createTheme({
   palette: {
