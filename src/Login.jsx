@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   Box, Card, CardContent, Typography, TextField, Button, 
   Tabs, Tab, Container, MenuItem, FormControl, InputLabel, Select,
-  Alert, IconButton
+  Alert, IconButton, InputAdornment 
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
 import logoUPC from './assets/logo-sede-laboulaye.png';
@@ -45,6 +47,13 @@ export default function Login() {
   const [selecciones, setSelecciones] = useState([
     { carreraId: '', anioCarreraId: '', aniosDisponibles: [] }
   ]);
+
+  // Estado para mostrar/ocultar contraseña
+  const [mostrarPassword, setMostrarPassword] = useState(false);
+  
+  const handleClickMostrarPassword = () => {
+    setMostrarPassword(!mostrarPassword);
+  };
 
   // Cargar las carreras al iniciar la pantalla
   useEffect(() => {
@@ -117,7 +126,6 @@ export default function Login() {
 
       if (respuesta.ok) {
         const data = await respuesta.json();
-        // Guardamos el token para que Matías lo use después en los permisos
         localStorage.setItem('token', data.token);
         navigate('/feed'); 
       } else {
@@ -212,7 +220,28 @@ export default function Login() {
                 <Box component="form" onSubmit={handleLoginSubmit} sx={{ color: '#000000', display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <Typography variant="body2" color="text.secondary">Ingresá con tu correo institucional para acceder a las novedades de tu carrera.</Typography>
                   <TextField label="Correo electrónico" type="email" fullWidth required size="small" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} />
-                  <TextField label="Contraseña" type="password" fullWidth required size="small" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />
+                  
+                  <TextField 
+  label="Contraseña" 
+  type={mostrarPassword ? 'text' : 'password'} 
+  fullWidth 
+  required 
+  size="small" 
+  value={loginPassword} 
+  onChange={(e) => setLoginPassword(e.target.value)} 
+  slotProps={{
+    input: {
+      endAdornment: (
+        <InputAdornment position="end">
+          <IconButton onClick={handleClickMostrarPassword} edge="end">
+            {mostrarPassword ? <VisibilityOff /> : <Visibility />}
+          </IconButton>
+        </InputAdornment>
+      ),
+    }
+  }}
+/>
+
                   <Typography 
                     variant="body2" 
                     component="a" 
@@ -233,9 +262,27 @@ export default function Login() {
                   <TextField label="Nombre" fullWidth required size="small" sx={{ mb: 2 }} value={nombre} onChange={(e) => setNombre(e.target.value)} />
                   <TextField label="Apellido" fullWidth required size="small" sx={{ mb: 2 }} value={apellido} onChange={(e) => setApellido(e.target.value)} />
                   <TextField label="Correo Electrónico" type="email" fullWidth required size="small" sx={{ mb: 2 }} value={email} onChange={(e) => setEmail(e.target.value)} />
-                  <TextField label="Contraseña" type="password" fullWidth required size="small" sx={{ mb: 3 }} value={password} onChange={(e) => setPassword(e.target.value)} />
                   
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1.5, color: '#000' }}>Seleccioná tus carreras en curso:</Typography>
+                  <TextField 
+  label="Contraseña" 
+  type={mostrarPassword ? 'text' : 'password'} 
+  fullWidth 
+  required 
+  size="small" 
+  value={loginPassword} 
+  onChange={(e) => setLoginPassword(e.target.value)} 
+  slotProps={{
+    input: {
+      endAdornment: (
+        <InputAdornment position="end">
+          <IconButton onClick={handleClickMostrarPassword} edge="end">
+            {mostrarPassword ? <VisibilityOff /> : <Visibility />}
+          </IconButton>
+        </InputAdornment>
+      ),
+    }
+  }}
+/>
                   
                   {selecciones.map((seleccion, index) => (
                     <Box key={index} sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'flex-start' }}>
