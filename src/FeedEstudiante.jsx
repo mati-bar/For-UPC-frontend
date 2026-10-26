@@ -4,15 +4,16 @@ import {
   Alert, CircularProgress, Link, Dialog, IconButton, Pagination
 } from '@mui/material';
 import {
-  Logout, School, FiberManualRecord, AttachFile, Refresh, Close, Download, AdminPanelSettings
+  Logout, School, FiberManualRecord, AttachFile, Refresh, Close, Download, AdminPanelSettings, Person
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
 // En .env: VITE_API_URL=https://for-upc-backend.onrender.com
-const API = import.meta.env.VITE_API_URL || 'VITE_API_URL';
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
-// ⚠️ Ruta del panel de administración en tu router: cambiala si usás otra
+// ⚠️ Rutas de tu router: cambialas si usás otras
 const RUTA_PANEL_ADMIN = '/admin';
+const RUTA_PERFIL = '/perfil';
 
 // ------------------------------------------------------------------ helpers
 class ApiError extends Error {
@@ -247,6 +248,13 @@ export default function VistaForo() {
             <Button variant="contained" size="small" startIcon={<AdminPanelSettings />} onClick={() => navigate(RUTA_PANEL_ADMIN)}
               sx={{ bgcolor: '#f7a600', color: '#fff', textTransform: 'none', fontWeight: 700, boxShadow: 'none', '&:hover': { bgcolor: '#bc7e01', boxShadow: 'none' } }}>
               Panel de Administración
+            </Button>
+          )}
+          {/* Solo para quienes NO son administradores (se espera a tener el perfil cargado para no mostrarlo un instante al admin) */}
+          {perfil && !esAdmin && (
+            <Button variant="outlined" size="small" startIcon={<Person />} onClick={() => navigate(RUTA_PERFIL)}
+              sx={{ color: '#f7a600', borderColor: '#f7a600', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#bc7e01', bgcolor: '#fffbeb', color: '#bc7e01' } }}>
+              Mi Perfil
             </Button>
           )}
           <Button variant="outlined" size="small" startIcon={<Logout />} onClick={handleCerrarSesion}
