@@ -198,31 +198,35 @@ export default function Perfil() {
             </Button>
           )}
 
-          <Divider sx={{ width: '100%', mb: 3 }} />
+          {perfil.rol !== 'ADMINISTRADOR' && (
+            <>
+              <Divider sx={{ width: '100%', mb: 3 }} />
 
-          <Box sx={{ width: '100%' }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#0B1E3B', mb: 1 }}>
-              Mis Inscripciones
-            </Typography>
+              <Box sx={{ width: '100%' }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#0B1E3B', mb: 1 }}>
+                  Mis Inscripciones
+                </Typography>
 
-            {perfil.inscripciones && perfil.inscripciones.length > 0 ? (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {perfil.inscripciones.map((inscripcion, index) => (
-                  <Card key={index} variant="outlined" sx={{ bgcolor: '#f8fafc', p: 1.5, borderRadius: 1 }}>
-                    <Typography variant="body2" sx={{ color: '#334155', fontWeight: 'bold' }}>
-                      {inscripcion.carrera
-                        ? `${inscripcion.carrera}${inscripcion.numero ? ` • ${inscripcion.numero}° Año` : ''}`
-                        : `ID de Inscripción de Carrera / Año: ${inscripcion.anioCarreraId || inscripcion.id}`}
-                    </Typography>
-                  </Card>
-                ))}
+                {perfil.inscripciones && perfil.inscripciones.length > 0 ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    {perfil.inscripciones.map((inscripcion, index) => (
+                      <Card key={index} variant="outlined" sx={{ bgcolor: '#f8fafc', p: 1.5, borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ color: '#334155', fontWeight: 'bold' }}>
+                          {inscripcion.carrera
+                            ? `${inscripcion.carrera}${inscripcion.numero ? ` - ${inscripcion.numero}° Año` : ''}`
+                            : `ID de Inscripción de Carrera / Año: ${inscripcion.anioCarreraId || inscripcion.id}`}
+                        </Typography>
+                      </Card>
+                    ))}
+                  </Box>
+                ) : (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    No tenés inscripciones registradas en el sistema.
+                  </Typography>
+                )}
               </Box>
-            ) : (
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                No tenés inscripciones registradas en el sistema.
-              </Typography>
-            )}
-          </Box>
+            </>
+          )}
         </CardContent>
       </Card>
     </Box>

@@ -4,13 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import api from './api/axiosConfig';
 
 export default function OlvidePassword() {
-  const [email, setEmail] = useState('');
-  const [cargando, setCargando] = useState(false);
-  const [mensaje, setMensaje] = useState(null);
-  const [error, setError] = useState(null);
-  const navigate = useNavigate();
+const [email, setEmail] = useState('');
+const [cargando, setCargando] = useState(false);
+const [mensaje, setMensaje] = useState(null);
+const [error, setError] = useState(null);
+const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
     e.preventDefault();
     setCargando(true);
     setError(null);

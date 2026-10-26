@@ -250,20 +250,21 @@ export default function VistaForo() {
               Panel de Administración
             </Button>
           )}
-          {/* Solo para quienes NO son administradores (se espera a tener el perfil cargado para no mostrarlo un instante al admin) */}
-          {perfil && !esAdmin && (
+        {/* Botón visible para TODOS los usuarios con sesión iniciada */}
+          {perfil && (
             <Button variant="outlined" size="small" startIcon={<Person />} onClick={() => navigate(RUTA_PERFIL)}
               sx={{ color: '#f7a600', borderColor: '#f7a600', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#bc7e01', bgcolor: '#fffbeb', color: '#bc7e01' } }}>
               Mi Perfil
             </Button>
           )}
+          
           <Button variant="outlined" size="small" startIcon={<Logout />} onClick={handleCerrarSesion}
             sx={{ color: '#475569', borderColor: '#cbd5e1', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#94a3b8', bgcolor: '#f1f5f9' } }}>
             Cerrar Sesión
           </Button>
         </Box>
       </Box>
-
+      
       <Container maxWidth="md">
 
         {/* ENCABEZADO */}
