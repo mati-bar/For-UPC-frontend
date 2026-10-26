@@ -11,7 +11,7 @@ import api from './api/axiosConfig'; // misma instancia de axios que usa Gestion
 // No figuran en la documentación: si dan 404 o 405, hay que crearlas en el backend.
 const RUTA_LISTAR = '/usuarios';                 // GET
 const RUTA_ELIMINAR = (id) => `/usuarios/${id}`; // DELETE
-const RUTA_EDITAR = (id) => `/usuarios/${id}`;   // PUT { nombre, apellido, inscripciones: [{ anioCarreraId }] }
+const RUTA_EDITAR = (id) => `/usuarios/${id}`;   // PUT { nombre, apellido, email, inscripciones: [{ anioCarreraId }] }
 
 const POR_PAGINA = 10; // alumnos por página
 
@@ -213,7 +213,9 @@ export default function GestionAlumnos() {
         const inscripciones = (alumnoEnEdicion?.inscripciones ?? [])
           .map((i) => ({ anioCarreraId: i.anioCarreraId }))
           .filter((i) => i.anioCarreraId != null);
-        await api.put(RUTA_EDITAR(idEdicion), { nombre, apellido, inscripciones });
+        // El backend también exige el correo: se reenvía el actual sin cambios
+        const email = (alumnoEnEdicion?.email ?? form.email ?? '').trim();
+        await api.put(RUTA_EDITAR(idEdicion), { nombre, apellido, email, inscripciones });
         resetFormulario();
         setExitoMsg('Cambios guardados.');
         await cargarAlumnos(pagina, true); // recarga la página actual: la lista refleja lo guardado en el backend
