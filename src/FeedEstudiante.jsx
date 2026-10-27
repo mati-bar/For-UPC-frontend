@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box, Container, Typography, Card, CardContent, Button, Chip, Divider, Paper,
   Alert, CircularProgress, Link, Dialog, IconButton, Pagination
@@ -11,10 +11,14 @@ import { useNavigate } from 'react-router-dom';
 const API = import.meta.env.VITE_API_URL || 'https://for-upc-backend.onrender.com';
 const RUTA_PANEL_ADMIN = '/admin';
 const RUTA_PERFIL = '/perfil';
+const POR_PAGINA = 5;
 
 // ------------------------------------------------------------------ helpers
 class ApiError extends Error {
-  constructor(status, message) { super(message); this.status = status; }
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
 }
 
 const mensajePorEstado = (status, texto) => {
@@ -38,9 +42,6 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   return res.json();
 }
 
-// Configuración de paginación directa con el backend
-const POR_PAGINA = 5;
-
 const tiempoRelativo = (iso) => {
   if (!iso) return '';
   const diff = (new Date(iso).getTime() - Date.now()) / 1000;
@@ -53,9 +54,15 @@ const tiempoRelativo = (iso) => {
 
 const destinosDe = (p) => {
   if (p.destinos && p.destinos.length > 0) {
-    return p.destinos.map((d) => ({ carreraId: d.carrera?.id, carrera: d.carrera?.nombre, numero: d.anio?.numero }));
+    return p.destinos.map((d) => ({
+      carreraId: d.carrera?.id,
+      carrera: d.carrera?.nombre,
+      numero: d.anio?.numero
+    }));
   }
-  if (p.carrera) return [{ carreraId: p.carrera.id, carrera: p.carrera.nombre, numero: p.anio?.numero }];
+  if (p.carrera) {
+    return [{ carreraId: p.carrera.id, carrera: p.carrera.nombre, numero: p.anio?.numero }];
+  }
   return [];
 };
 
@@ -86,7 +93,7 @@ async function descargarImagen(url, titulo) {
 }
 
 const ordenarInscripciones = (insc = []) =>
-  [...insc].sort((a, b) => a.carrera.localeCompare(b.carrera) || a.numero - b.numero);
+  [...insc].sort((a, b) => a.carrera?.localeCompare(b.carrera) || a.numero - b.numero);
 
 const botonCompacto = {
   minWidth: 0,
@@ -102,16 +109,11 @@ const Etiqueta = ({ children }) => (
 export default function VistaForo() {
   const navigate = useNavigate();
   const [perfil, setPerfil] = useState(null);
-  
-  // Estado para la paginación del servidor
-  const [publicaciones, setPublicaciones] = useState([]);
-  const [pagina, setPagina] = useState(1); // 1-based para MUI Pagination
-  const [totalPaginas, setTotalPaginas] = useState(1);
-  const [totalElementos, setTotalElementos] = useState(0);
-
+  const [todasLasPublicaciones, setTodasLasPublicaciones] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [imagenAbierta, setImagenAbierta] = useState(null);
+  const [pagina, setPagina] = useState(1);
 
   const handleCerrarSesion = useCallback(() => {
     localStorage.removeItem('token');
@@ -123,29 +125,22 @@ export default function VistaForo() {
     setter(err.message || 'Ocurrió un error inesperado.');
   }, [handleCerrarSesion]);
 
-  // Función para pedir solo 5 elementos correspondientes a la página solicitada
-  const cargarPublicaciones = useCallback(async (nroPagina, { silencioso = false } = {}) => {
+  // Carga inicial y refresco
+  const cargar = useCallback(async ({ silencioso = false } = {}) => {
     if (!silencioso) {
       setCargando(true);
       setError('');
     }
     try {
-      // Spring Data / APIs REST suelen usar page index basado en 0
-      const pageIndex = nroPagina - 1;
-      
-      // Enviamos auth: true por si el backend necesita el JWT para saber qué carrera filtrar
-      const data = await request(`/publicaciones?page=${pageIndex}&size=${POR_PAGINA}`, { auth: true });
+      const [resPerfil, resPubs] = await Promise.all([
+        request('/usuarios/me'),
+        request('/publicaciones', { auth: true })
+      ]);
+      setPerfil(resPerfil);
 
-      if (Array.isArray(data)) {
-        // Fallback por si la API responde con un array directo
-        setPublicaciones(data);
-        setTotalPaginas(1);
-        setTotalElementos(data.length);
-      } else {
-        setPublicaciones(data?.content ?? []);
-        setTotalPaginas(data?.totalPages ?? 1);
-        setTotalElementos(data?.totalElements ?? 0);
-      }
+      // Acepta tanto lista directa como Page de Spring (resPubs.content)
+      const lista = Array.isArray(resPubs) ? resPubs : (resPubs?.content ?? []);
+      setTodasLasPublicaciones(lista);
     } catch (err) {
       if (silencioso) {
         if (err.status === 401) handleCerrarSesion();
@@ -161,28 +156,18 @@ export default function VistaForo() {
     }
   }, [manejarError, handleCerrarSesion]);
 
-  // Carga inicial del perfil de usuario
   useEffect(() => {
     if (!localStorage.getItem('token')) {
       navigate('/');
       return;
     }
-    request('/usuarios/me')
-      .then((p) => setPerfil(p))
-      .catch((err) => manejarError(err, setError));
-  }, [navigate, manejarError]);
+    cargar();
+  }, [cargar, navigate]);
 
-  // Carga las publicaciones cada vez que cambia la página seleccionada
-  useEffect(() => {
-    cargarPublicaciones(pagina);
-  }, [pagina, cargarPublicaciones]);
-
-  // Refresco automático de la página actual cada 60s
+  // Intervalo de auto-refresco
   useEffect(() => {
     const refrescar = () => {
-      if (document.visibilityState === 'visible') {
-        cargarPublicaciones(pagina, { silencioso: true });
-      }
+      if (document.visibilityState === 'visible') cargar({ silencioso: true });
     };
     const intervalo = setInterval(refrescar, 60000);
     document.addEventListener('visibilitychange', refrescar);
@@ -192,11 +177,37 @@ export default function VistaForo() {
       document.removeEventListener('visibilitychange', refrescar);
       window.removeEventListener('focus', refrescar);
     };
-  }, [pagina, cargarPublicaciones]);
+  }, [cargar]);
 
+  // -------------------------------------------------- filtrado y paginación
   const esEstudiante = perfil?.rol === 'ESTUDIANTE';
   const esAdmin = perfil?.rol === 'ADMINISTRADOR';
-  const inscripciones = ordenarInscripciones(perfil?.inscripciones);
+  const inscripciones = useMemo(() => ordenarInscripciones(perfil?.inscripciones), [perfil]);
+
+  // 1. Filtrar por fecha de expiración y por carrera/año
+  const feedFiltrado = useMemo(() => {
+    const ahora = Date.now();
+
+    return todasLasPublicaciones
+      .filter((p) => !p.fechaExpiracion || new Date(p.fechaExpiracion).getTime() > ahora)
+      .map((p) => {
+        const destinos = destinosDe(p);
+        // Coincidencia exacta con las inscripciones del estudiante
+        const propios = destinos.filter((d) =>
+          inscripciones.some((i) => i.carreraId === d.carreraId && (d.numero == null || i.numero === d.numero))
+        );
+        return { ...p, propios };
+      })
+      // Si es estudiante, solo pasan las que tienen al menos un destino propio
+      .filter((p) => !esEstudiante || p.propios.length > 0)
+      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+  }, [todasLasPublicaciones, inscripciones, esEstudiante]);
+
+  // 2. Paginar de a 5 sobre el feed ya filtrado
+  const totalPaginas = Math.max(1, Math.ceil(feedFiltrado.length / POR_PAGINA));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const desde = (paginaActual - 1) * POR_PAGINA;
+  const feedPagina = feedFiltrado.slice(desde, desde + POR_PAGINA);
 
   const cambiarPagina = (_, nueva) => {
     setPagina(nueva);
@@ -215,10 +226,6 @@ export default function VistaForo() {
 
   const abrirImagen = (p) => setImagenAbierta({ url: p.imagenUrl, titulo: p.titulo });
 
-  // Cálculos de visualización de rango
-  const desde = (pagina - 1) * POR_PAGINA;
-  const hasta = desde + publicaciones.length;
-
   return (
     <Box sx={{ backgroundColor: '#f8fafc', minHeight: '100vh', pb: 6 }}>
       {/* BARRA SUPERIOR */}
@@ -234,26 +241,44 @@ export default function VistaForo() {
         </Box>
         <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
           {esAdmin && (
-            <Button variant="contained" size="small" aria-label="Panel de Administración" startIcon={<AdminPanelSettings />} onClick={() => navigate(RUTA_PANEL_ADMIN)}
-              sx={{ ...botonCompacto, bgcolor: '#f7a600', color: '#fff', textTransform: 'none', fontWeight: 700, boxShadow: 'none', '&:hover': { bgcolor: '#bc7e01', boxShadow: 'none' } }}>
+            <Button
+              variant="contained"
+              size="small"
+              aria-label="Panel de Administración"
+              startIcon={<AdminPanelSettings />}
+              onClick={() => navigate(RUTA_PANEL_ADMIN)}
+              sx={{ ...botonCompacto, bgcolor: '#f7a600', color: '#fff', textTransform: 'none', fontWeight: 700, boxShadow: 'none', '&:hover': { bgcolor: '#bc7e01', boxShadow: 'none' } }}
+            >
               <Etiqueta>Panel de Administración</Etiqueta>
             </Button>
           )}
           {perfil && (
-            <Button variant="outlined" size="small" aria-label="Mi Perfil" startIcon={<Person />} onClick={() => navigate(RUTA_PERFIL)}
-              sx={{ ...botonCompacto, color: '#f7a600', borderColor: '#f7a600', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#bc7e01', bgcolor: '#fffbeb', color: '#bc7e01' } }}>
+            <Button
+              variant="outlined"
+              size="small"
+              aria-label="Mi Perfil"
+              startIcon={<Person />}
+              onClick={() => navigate(RUTA_PERFIL)}
+              sx={{ ...botonCompacto, color: '#f7a600', borderColor: '#f7a600', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#bc7e01', bgcolor: '#fffbeb', color: '#bc7e01' } }}
+            >
               <Etiqueta>Mi Perfil</Etiqueta>
             </Button>
           )}
-          <Button variant="outlined" size="small" aria-label="Cerrar Sesión" startIcon={<Logout />} onClick={handleCerrarSesion}
-            sx={{ ...botonCompacto, color: '#475569', borderColor: '#cbd5e1', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#94a3b8', bgcolor: '#f1f5f9' } }}>
+          <Button
+            variant="outlined"
+            size="small"
+            aria-label="Cerrar Sesión"
+            startIcon={<Logout />}
+            onClick={handleCerrarSesion}
+            sx={{ ...botonCompacto, color: '#475569', borderColor: '#cbd5e1', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#94a3b8', bgcolor: '#f1f5f9' } }}
+          >
             <Etiqueta>Cerrar Sesión</Etiqueta>
           </Button>
         </Box>
       </Box>
 
       <Container maxWidth="md">
-        {/* ENCABEZADO */}
+        {/* ENCABEZADO DE SECCIÓN */}
         <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>
@@ -264,7 +289,7 @@ export default function VistaForo() {
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Button size="small" startIcon={<Refresh />} onClick={() => cargarPublicaciones(pagina)} disabled={cargando} sx={{ textTransform: 'none', fontWeight: 600 }}>
+            <Button size="small" startIcon={<Refresh />} onClick={() => cargar()} disabled={cargando} sx={{ textTransform: 'none', fontWeight: 600 }}>
               Actualizar
             </Button>
           </Box>
@@ -273,12 +298,10 @@ export default function VistaForo() {
         {error && <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>{error}</Alert>}
         {cargando && <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>}
 
-        {/* LISTADO DE PUBLICACIONES (Vienen directo 5 del backend) */}
-        {!cargando && publicaciones.map((p) => {
+        {/* LISTADO EXACTO DE 5 TARJETAS POR PÁGINA */}
+        {!cargando && feedPagina.map((p) => {
           const destinos = destinosDe(p);
-          const propios = esEstudiante
-            ? destinos.filter((d) => inscripciones.some((i) => i.carreraId === d.carreraId && (d.numero == null || i.numero === d.numero)))
-            : destinos;
+          const chipsDestinos = p.propios.length ? p.propios : destinos;
 
           return (
             <Card key={p.id} sx={{ borderRadius: 2.5, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.05)', mb: 3, '&:hover': { boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.07)' } }}>
@@ -288,7 +311,7 @@ export default function VistaForo() {
                     {p.urgente && (
                       <Chip label="Urgente" size="small" sx={{ bgcolor: '#ffe4e6', color: '#e11d48', fontWeight: 600, border: '1px solid #fecdd3' }} />
                     )}
-                    {(propios.length ? propios : destinos).map((d, i) => (
+                    {chipsDestinos.map((d, i) => (
                       <Chip
                         key={i}
                         size="small"
@@ -327,8 +350,13 @@ export default function VistaForo() {
                   />
                 )}
                 {p.archivoUrl && (
-                  <Link href={p.archivoUrl} target="_blank" rel="noopener noreferrer" underline="hover"
-                    sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mb: 2, fontSize: '0.875rem', maxWidth: '100%', overflowWrap: 'anywhere' }}>
+                  <Link
+                    href={p.archivoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    underline="hover"
+                    sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mb: 2, fontSize: '0.875rem', maxWidth: '100%', overflowWrap: 'anywhere' }}
+                  >
                     <AttachFile fontSize="small" /> {p.archivoNombre || 'Ver archivo adjunto'}
                   </Link>
                 )}
@@ -341,12 +369,12 @@ export default function VistaForo() {
           );
         })}
 
-        {/* PAGINACIÓN CON DATOS DEL SERVIDOR */}
+        {/* PAGINACIÓN */}
         {!cargando && totalPaginas > 1 && (
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1, mb: 2 }}>
             <Pagination
               count={totalPaginas}
-              page={pagina}
+              page={paginaActual}
               onChange={cambiarPagina}
               shape="rounded"
               siblingCount={0}
@@ -359,19 +387,19 @@ export default function VistaForo() {
           </Box>
         )}
 
-        {/* ESTADO / TOTALES */}
+        {/* INFORMACIÓN DEL FEED */}
         {!cargando && (
           <Paper sx={{ p: 3, borderRadius: 2, textAlign: 'center', bgcolor: 'transparent', boxShadow: 'none' }}>
             <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 500 }}>
-              {publicaciones.length === 0
+              {feedFiltrado.length === 0
                 ? (esEstudiante ? 'Todavía no hay publicaciones para tu carrera y año.' : 'Todavía no hay publicaciones.')
-                : `Mostrando ${desde + 1}–${hasta} de ${totalElementos} publicaciones`}
+                : `Mostrando ${desde + 1}–${desde + feedPagina.length} de ${feedFiltrado.length} publicaciones`}
             </Typography>
           </Paper>
         )}
       </Container>
 
-      {/* VISOR DE IMAGEN */}
+      {/* VISOR MODAL DE IMAGEN */}
       <Dialog
         open={Boolean(imagenAbierta)}
         onClose={() => setImagenAbierta(null)}
