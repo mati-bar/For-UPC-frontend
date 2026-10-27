@@ -263,14 +263,15 @@ export default function Login() {
                   <TextField label="Apellido" fullWidth required size="small" sx={{ mb: 2 }} value={apellido} onChange={(e) => setApellido(e.target.value)} />
                   <TextField label="Correo Electrónico" type="email" fullWidth required size="small" sx={{ mb: 2 }} value={email} onChange={(e) => setEmail(e.target.value)} />
                   
-                  <TextField 
+                 <TextField 
   label="Contraseña" 
   type={mostrarPassword ? 'text' : 'password'} 
   fullWidth 
   required 
   size="small" 
-  value={loginPassword} 
-  onChange={(e) => setLoginPassword(e.target.value)} 
+  sx={{ mb: 3 }} 
+  value={password} 
+  onChange={(e) => setPassword(e.target.value)} 
   slotProps={{
     input: {
       endAdornment: (
@@ -283,6 +284,8 @@ export default function Login() {
     }
   }}
 />
+
+Buscá el cajón de la contraseña dentro del bloque de Registrarse (tabValue === 1) y reemplazalo por esta versión. Fijate que las líneas de value y onChange son distintas a las del login:
                   
                   {selecciones.map((seleccion, index) => (
                     <Box key={index} sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'flex-start' }}>
