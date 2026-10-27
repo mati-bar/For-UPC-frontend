@@ -110,7 +110,61 @@ const Etiqueta = ({ children }) => (
   <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{children}</Box>
 );
 
-// ---------------------------------------------------------------- componente
+// ------------------------------------------------ SUBCOMPONENTE DE CHIPS
+// Muestra las primeras 2 carreras y un botón para alternar el resto ("View all")
+function ChipsDestinos({ destinos = [] }) {
+  const [expandido, setExpandido] = useState(false);
+  const LIMITE = 2;
+
+  if (!destinos.length) return null;
+
+  const visibles = expandido ? destinos : destinos.slice(0, LIMITE);
+  const restantes = destinos.length - LIMITE;
+
+  return (
+    <>
+      {visibles.map((d, i) => (
+        <Chip
+          key={i}
+          size="small"
+          label={`${d.carrera}${d.numero ? ` • ${d.numero}° Año` : ''}`}
+          sx={{
+            bgcolor: '#f1f5f9',
+            color: '#334155',
+            fontWeight: 600,
+            fontSize: '0.75rem',
+            border: '1px solid #e2e8f0',
+            maxWidth: '100%',
+            height: 'auto',
+            '& .MuiChip-label': { whiteSpace: 'normal', py: 0.5 }
+          }}
+        />
+      ))}
+
+      {destinos.length > LIMITE && (
+        <Chip
+          size="small"
+          label={expandido ? 'Ver menos' : `+${restantes} ver todas`}
+          onClick={() => setExpandido(!expandido)}
+          clickable
+          sx={{
+            bgcolor: expandido ? '#f1f5f9' : '#fffbeb',
+            color: expandido ? '#64748b' : '#b45309',
+            border: `1px dashed ${expandido ? '#cbd5e1' : '#fcd34d'}`,
+            fontWeight: 700,
+            fontSize: '0.72rem',
+            cursor: 'pointer',
+            '&:hover': {
+              bgcolor: expandido ? '#e2e8f0' : '#fef3c7'
+            }
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- COMPONENTE PRINCIPAL
 export default function VistaForo() {
   const navigate = useNavigate();
   const [perfil, setPerfil] = useState(null);
@@ -147,7 +201,7 @@ export default function VistaForo() {
       .catch((err) => manejarError(err, setError));
   }, [navigate, manejarError]);
 
-  // Función idéntica a cargarFeed del panel admin
+  // Carga con paginación
   const cargarFeed = useCallback(async (paginaPedida = 1, { silencioso = false } = {}) => {
     if (!silencioso) {
       setCargandoFeed(true);
@@ -158,20 +212,16 @@ export default function VistaForo() {
       let data = await pedirPublicaciones(numero);
 
       if (Array.isArray(data)) {
-        // Backend sin paginar (devuelve lista completa): respaldamos paginando en memoria
         setTotalAnuncios(data.length);
         setTotalPaginas(Math.max(1, Math.ceil(data.length / POR_PAGINA)));
         setAnunciosFeed(data.slice((numero - 1) * POR_PAGINA, numero * POR_PAGINA));
       } else {
-        // Backend paginado con Spring Page
         const total = Math.max(1, data?.totalPages ?? 1);
         if (numero > total) {
           numero = total;
           data = await pedirPublicaciones(numero);
         }
 
-        // Si el backend devolvió todo el array en data.content sin recortar (ignora size=5),
-        // se recorta a 5 como reaseguro:
         const listaBruta = data?.content ?? [];
         if (listaBruta.length > POR_PAGINA && (data?.totalPages ?? 1) === 1) {
           setTotalAnuncios(listaBruta.length);
@@ -342,18 +392,8 @@ export default function VistaForo() {
                     {p.urgente && (
                       <Chip label="Urgente" size="small" sx={{ bgcolor: '#ffe4e6', color: '#e11d48', fontWeight: 600, border: '1px solid #fecdd3' }} />
                     )}
-                    {chipsDestinos.map((d, i) => (
-                      <Chip
-                        key={i}
-                        size="small"
-                        label={`${d.carrera}${d.numero ? ` • ${d.numero}° Año` : ''}`}
-                        sx={{
-                          bgcolor: '#f1f5f9', color: '#334155', fontWeight: 600, fontSize: '0.75rem', border: '1px solid #e2e8f0',
-                          maxWidth: '100%', height: 'auto',
-                          '& .MuiChip-label': { whiteSpace: 'normal', py: 0.5 }
-                        }}
-                      />
-                    ))}
+                    {/* Renderiza las primeras 2 carreras y el botón para ver el resto */}
+                    <ChipsDestinos destinos={chipsDestinos} />
                   </Box>
                   <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 500, flexShrink: 0 }}>
                     {tiempoRelativo(p.fecha)}
