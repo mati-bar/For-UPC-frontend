@@ -111,6 +111,18 @@ async function descargarImagen(url, titulo) {
 const ordenarInscripciones = (insc = []) =>
   [...insc].sort((a, b) => a.carrera.localeCompare(b.carrera) || a.numero - b.numero);
 
+// Estilos de los botones de la barra superior: en celular muestran solo el ícono
+const botonCompacto = {
+  minWidth: 0,
+  px: { xs: 1, sm: 1.5 },
+  '& .MuiButton-startIcon': { mr: { xs: 0, sm: '6px' }, ml: { xs: 0, sm: '-2px' } }
+};
+
+// Texto de un botón: se oculta en pantallas chicas (queda el ícono)
+const Etiqueta = ({ children }) => (
+  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{children}</Box>
+);
+
 // ---------------------------------------------------------------- componente
 export default function VistaForo() {
   const navigate = useNavigate();
@@ -233,44 +245,44 @@ export default function VistaForo() {
     <Box sx={{ backgroundColor: '#f8fafc', minHeight: '100vh', pb: 6 }}>
 
       {/* BARRA SUPERIOR */}
-      <Box sx={{ bgcolor: '#ffffff', borderBottom: '1px solid #e2e8f0', py: 2, px: { xs: 2, md: 4 }, mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-        <Box>
-          <Typography variant="h6" sx={{ color: '#0f172a', fontWeight: 700, fontSize: '1.1rem' }}>
+      <Box sx={{ bgcolor: '#ffffff', borderBottom: '1px solid #e2e8f0', py: { xs: 1.5, md: 2 }, px: { xs: 2, md: 4 }, mb: { xs: 2.5, md: 4 }, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography variant="h6" sx={{ color: '#0f172a', fontWeight: 700, fontSize: { xs: '1rem', sm: '1.1rem' } }}>
             Portal Informativo Académico
           </Typography>
-          <Typography variant="caption" sx={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: 0.75, fontWeight: 500 }}>
-            <School sx={{ fontSize: 16, color: '#f59e0b' }} />
-            {textoEncabezado}
+          <Typography variant="caption" sx={{ color: '#64748b', display: 'flex', alignItems: 'flex-start', gap: 0.75, fontWeight: 500, lineHeight: 1.4 }}>
+            <School sx={{ fontSize: 16, color: '#f59e0b', flexShrink: 0, mt: '1px' }} />
+            <Box component="span" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>{textoEncabezado}</Box>
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
           {esAdmin && (
-            <Button variant="contained" size="small" startIcon={<AdminPanelSettings />} onClick={() => navigate(RUTA_PANEL_ADMIN)}
-              sx={{ bgcolor: '#f7a600', color: '#fff', textTransform: 'none', fontWeight: 700, boxShadow: 'none', '&:hover': { bgcolor: '#bc7e01', boxShadow: 'none' } }}>
-              Panel de Administración
+            <Button variant="contained" size="small" aria-label="Panel de Administración" startIcon={<AdminPanelSettings />} onClick={() => navigate(RUTA_PANEL_ADMIN)}
+              sx={{ ...botonCompacto, bgcolor: '#f7a600', color: '#fff', textTransform: 'none', fontWeight: 700, boxShadow: 'none', '&:hover': { bgcolor: '#bc7e01', boxShadow: 'none' } }}>
+              <Etiqueta>Panel de Administración</Etiqueta>
             </Button>
           )}
-        {/* Botón visible para TODOS los usuarios con sesión iniciada */}
+          {/* Botón visible para TODOS los usuarios con sesión iniciada */}
           {perfil && (
-            <Button variant="outlined" size="small" startIcon={<Person />} onClick={() => navigate(RUTA_PERFIL)}
-              sx={{ color: '#f7a600', borderColor: '#f7a600', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#bc7e01', bgcolor: '#fffbeb', color: '#bc7e01' } }}>
-              Mi Perfil
+            <Button variant="outlined" size="small" aria-label="Mi Perfil" startIcon={<Person />} onClick={() => navigate(RUTA_PERFIL)}
+              sx={{ ...botonCompacto, color: '#f7a600', borderColor: '#f7a600', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#bc7e01', bgcolor: '#fffbeb', color: '#bc7e01' } }}>
+              <Etiqueta>Mi Perfil</Etiqueta>
             </Button>
           )}
-          
-          <Button variant="outlined" size="small" startIcon={<Logout />} onClick={handleCerrarSesion}
-            sx={{ color: '#475569', borderColor: '#cbd5e1', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#94a3b8', bgcolor: '#f1f5f9' } }}>
-            Cerrar Sesión
+
+          <Button variant="outlined" size="small" aria-label="Cerrar Sesión" startIcon={<Logout />} onClick={handleCerrarSesion}
+            sx={{ ...botonCompacto, color: '#475569', borderColor: '#cbd5e1', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#94a3b8', bgcolor: '#f1f5f9' } }}>
+            <Etiqueta>Cerrar Sesión</Etiqueta>
           </Button>
         </Box>
       </Box>
-      
+
       <Container maxWidth="md">
 
         {/* ENCABEZADO */}
         <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
           <Box>
-            <Typography variant="h5" sx={{ fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em' }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>
               Novedades y Comunicados
             </Typography>
             <Typography variant="body2" sx={{ color: '#64748b' }}>
@@ -291,16 +303,21 @@ export default function VistaForo() {
         {/* TARJETAS DE COMUNICADOS */}
         {!cargando && feedPagina.map((p) => (
           <Card key={p.id} sx={{ borderRadius: 2.5, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.05)', mb: 3, '&:hover': { boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.07)' } }}>
-            <CardContent sx={{ p: { xs: 2.5, sm: 3 } }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 1.5 }}>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: { xs: 1, sm: 2 }, mb: 1.5 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, minWidth: 0, flex: 1 }}>
                   {p.urgente && (
                     <Chip label="Urgente" size="small" sx={{ bgcolor: '#ffe4e6', color: '#e11d48', fontWeight: 600, border: '1px solid #fecdd3' }} />
                   )}
                   {(p.propios.length ? p.propios : destinosDe(p)).map((d, i) => (
                     <Chip key={i} size="small"
                       label={`${d.carrera}${d.numero ? ` - ${d.numero}° Año` : ''}`}
-                      sx={{ bgcolor: '#f1f5f9', color: '#334155', fontWeight: 600, fontSize: '0.75rem', border: '1px solid #e2e8f0' }} />
+                      sx={{
+                        bgcolor: '#f1f5f9', color: '#334155', fontWeight: 600, fontSize: '0.75rem', border: '1px solid #e2e8f0',
+                        // En celular, los nombres largos de carrera se parten en varias líneas en vez de cortarse
+                        maxWidth: '100%', height: 'auto',
+                        '& .MuiChip-label': { whiteSpace: 'normal', py: 0.5 }
+                      }} />
                   ))}
                 </Box>
                 <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 500, flexShrink: 0 }}>
@@ -308,10 +325,10 @@ export default function VistaForo() {
                 </Typography>
               </Box>
 
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#0f172a', mb: 1, fontSize: '1.05rem', lineHeight: 1.4 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#0f172a', mb: 1, fontSize: '1.05rem', lineHeight: 1.4, overflowWrap: 'anywhere' }}>
                 {p.titulo}
               </Typography>
-              <Typography variant="body2" sx={{ color: '#475569', mb: 2, lineHeight: 1.65, whiteSpace: 'pre-line' }}>
+              <Typography variant="body2" sx={{ color: '#475569', mb: 2, lineHeight: 1.65, whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}>
                 {p.mensaje}
               </Typography>
 
@@ -325,14 +342,14 @@ export default function VistaForo() {
                   onClick={() => abrirImagen(p)}
                   onKeyDown={(e) => e.key === 'Enter' && abrirImagen(p)}
                   sx={{
-                    maxWidth: '100%', maxHeight: 320, borderRadius: 1.5, mb: 2, display: 'block',
+                    maxWidth: '100%', maxHeight: { xs: 240, sm: 320 }, borderRadius: 1.5, mb: 2, display: 'block',
                     cursor: 'zoom-in', transition: 'opacity 0.15s', '&:hover': { opacity: 0.92 }
                   }}
                 />
               )}
               {p.archivoUrl && (
                 <Link href={p.archivoUrl} target="_blank" rel="noopener noreferrer" underline="hover"
-                  sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mb: 2, fontSize: '0.875rem' }}>
+                  sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mb: 2, fontSize: '0.875rem', maxWidth: '100%', overflowWrap: 'anywhere' }}>
                   <AttachFile fontSize="small" /> {p.archivoNombre || 'Ver archivo adjunto'}
                 </Link>
               )}
