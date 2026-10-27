@@ -284,8 +284,6 @@ export default function Login() {
     }
   }}
 />
-
-Buscá el cajón de la contraseña dentro del bloque de Registrarse (tabValue === 1) y reemplazalo por esta versión. Fijate que las líneas de value y onChange son distintas a las del login:
                   
                   {selecciones.map((seleccion, index) => (
                     <Box key={index} sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'flex-start' }}>
