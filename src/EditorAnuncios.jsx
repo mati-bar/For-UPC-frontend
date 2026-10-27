@@ -12,7 +12,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import DownloadIcon from '@mui/icons-material/Download';
 
 // En .env: VITE_API_URL=https://for-upc-backend.onrender.com
-const API_URL = import.meta.env.VITE_API_URL || 'VITE_API_URL';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 const MAX_IMAGEN = 5 * 1024 * 1024;   // 5 MB
 const MAX_ARCHIVO = 10 * 1024 * 1024; // 10 MB
 const POR_PAGINA = 5;                 // anuncios por página en el historial
@@ -205,92 +205,71 @@ export default function EditorAnuncios() {
   };
 
   const handleEditarAnuncio = async (anuncio) => {
-  setError('');
-  setExito('');
+    setError('');
+    setExito('');
 
-  try {
-    // 1. Obtener todas las carreras con sus años
-    // mediante una única solicitud HTTP.
-    const response = await fetch(`${API_URL}/carreras/con-anios`);
+    try {
+      // 1. Catálogo de carreras con sus años, en una única petición
+      const response = await fetch(`${API_URL}/carreras/con-anios`);
+      if (!response.ok) throw new Error(await leerError(response));
+      const catalogo = await response.json();
 
-    if (!response.ok) {
-      throw new Error(await leerError(response));
-    }
-
-    const carrerasConAnios = await response.json();
-
-    // 2. Obtener los destinos actuales de la publicación.
-    const destinos = anuncio.destinos || [];
-
-    // 3. Identificar las carreras relacionadas.
-    const idsCarrera = [
-      ...new Set(destinos.map((d) => d.carrera.id))
-    ];
-
-    // 4. Reconstruir la selección usando el catálogo.
-    const seleccion = {};
-
-    destinos.forEach((destino) => {
-      const carreraId = destino.carrera.id;
-      const numeroAnio = destino.anio.numero;
-
-      const carrera = carrerasConAnios.find(
-        (c) => c.id === carreraId
-      );
-
-      if (!carrera) return;
-
-      const anio = carrera.anios.find(
-        (a) => a.numero === numeroAnio
-      );
-
-      if (anio) {
-        if (!seleccion[carreraId]) {
-          seleccion[carreraId] = [];
-        }
-
-        seleccion[carreraId].push(anio.anioCarreraId);
+      // 2. Guardar los años de cada carrera: los selectores de año los necesitan para mostrar
+      //    las opciones y lo que está seleccionado (sin esto aparecían vacíos)
+      setAniosPorCarrera((prev) => ({
+        ...prev,
+        ...Object.fromEntries(catalogo.map((c) => [c.id, c.anios ?? []]))
+      }));
+      if (carreras.length === 0) {
+        setCarreras(catalogo.map((c) => ({ id: c.id, nombre: c.nombre })));
       }
-    });
 
-    // 5. Completar el formulario de edición.
-    setTitulo(anuncio.titulo);
-    setContenido(anuncio.mensaje);
-    setEsUrgente(!!anuncio.urgente);
+      // 3. Destinos actuales de la publicación. Se aceptan los dos formatos del backend:
+      //    anidado ({ carrera: { id }, anio: { numero } }) o con ids sueltos ({ carreraId, anioId })
+      const destinos = anuncio.destinos || [];
+      const idsCarrera = [
+        ...new Set(destinos.map((d) => d.carrera?.id ?? d.carreraId).filter((id) => id != null))
+      ];
 
-    // Mantener la fecha de expiración actual.
-    setDuracion('MANTENER');
+      // 4. Reconstruir la selección de años por carrera
+      const seleccion = {};
+      destinos.forEach((d) => {
+        const carreraId = d.carrera?.id ?? d.carreraId;
+        const carrera = catalogo.find((c) => c.id === carreraId);
+        if (!carrera) return;
 
-    setArchivo(null);
-    setImagen(null);
-    setEsGeneral(false);
+        const anio = d.anio?.numero != null
+          ? carrera.anios.find((a) => a.numero === d.anio.numero)
+          : carrera.anios.find((a) => a.anioCarreraId === d.anioId);
 
-    setCarrerasDestino(idsCarrera);
-    setAniosDestino(seleccion);
+        if (anio) {
+          (seleccion[carreraId] = seleccion[carreraId] || []).push(anio.anioCarreraId);
+        }
+      });
 
-    setIdEdicion(anuncio.id);
-    setAnuncioEnEdicion(anuncio);
+      // 5. Completar el formulario de edición
+      setTitulo(anuncio.titulo);
+      setContenido(anuncio.mensaje);
+      setEsUrgente(!!anuncio.urgente);
+      setDuracion('MANTENER'); // mantener la fecha de expiración actual
+      setArchivo(null);
+      setImagen(null);
+      setEsGeneral(false);
+      setCarrerasDestino(idsCarrera);
+      setAniosDestino(seleccion);
+      setIdEdicion(anuncio.id);
+      setAnuncioEnEdicion(anuncio);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    window.scrollTo({
-      top: 0,
-      behavior: 'smooth'
-    });
-
-    // 6. Advertir sobre publicaciones históricas.
-    if (destinos.length === 0) {
-      setError(
-        'Esta publicación es histórica (sin destinos múltiples). ' +
-        'Elegí al menos un destino antes de guardar.'
-      );
+      // 6. Advertir sobre publicaciones históricas
+      if (destinos.length === 0) {
+        setError('Esta publicación es histórica (sin destinos múltiples). Elegí al menos un destino antes de guardar.');
+      }
+    } catch (err) {
+      setError(err.message || 'No se pudo cargar la publicación para editar.');
     }
+  };
 
-  } catch (err) {
-    setError(
-      err.message ||
-      'No se pudo cargar la publicación para editar.'
-    );
-  }
-};
   const toggleCarreras = async (ids) => {
     setCarrerasDestino(ids);
     // Quitar selecciones de carreras destildadas
