@@ -1,17 +1,14 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Container, Typography, Card, CardContent, Button, Chip, Divider, Paper,
   Alert, CircularProgress, Link, Dialog, IconButton, Pagination
 } from '@mui/material';
 import {
-  Logout, School, FiberManualRecord, AttachFile, Refresh, Close, Download, AdminPanelSettings, Person
+  Logout, School, AttachFile, Refresh, Close, Download, AdminPanelSettings, Person
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
-// En .env: VITE_API_URL=https://for-upc-backend.onrender.com
 const API = import.meta.env.VITE_API_URL || 'https://for-upc-backend.onrender.com';
-
-// ⚠️ Rutas de tu router: cambialas si usás otras
 const RUTA_PANEL_ADMIN = '/admin';
 const RUTA_PERFIL = '/perfil';
 
@@ -26,12 +23,11 @@ const mensajePorEstado = (status, texto) => {
   return texto || `Error ${status}`;
 };
 
-// Centraliza URL base, JWT y manejo de errores (el backend puede devolver texto plano)
 async function request(path, { method = 'GET', body, auth = true } = {}) {
   const token = localStorage.getItem('token');
   const res = await fetch(API + path, {
     method,
-    cache: 'no-store', // siempre datos frescos, nunca una copia guardada por el navegador
+    cache: 'no-store',
     headers: {
       ...(auth && token ? { Authorization: `Bearer ${token}` } : {}),
       ...(body ? { 'Content-Type': 'application/json' } : {})
@@ -42,23 +38,8 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   return res.json();
 }
 
-// El backend pagina (máx. 100 por página) pero NO filtra por carrera/año del alumno: ese filtro
-// se hace acá. Por eso se traen todas las páginas, se filtra y recién después se pagina en pantalla.
-// Si se paginara directo en el servidor, un alumno vería páginas incompletas o vacías.
-const POR_PAGINA = 5;        // publicaciones que se muestran por página en pantalla
-const TAM_PAGINA_API = 100;  // tamaño de página que se pide al backend (máximo permitido)
-const MAX_PAGINAS_API = 20;  // tope de seguridad contra bucles
-
-async function cargarTodasLasPublicaciones() {
-  const todas = [];
-  for (let page = 0; page < MAX_PAGINAS_API; page++) {
-    const data = await request(`/publicaciones?page=${page}&size=${TAM_PAGINA_API}`, { auth: false });
-    if (Array.isArray(data)) return data; // respuesta sin paginar (array simple)
-    todas.push(...(data?.content ?? []));
-    if (page + 1 >= (data?.totalPages ?? 1)) break;
-  }
-  return todas;
-}
+// Configuración de paginación directa con el backend
+const POR_PAGINA = 5;
 
 const tiempoRelativo = (iso) => {
   if (!iso) return '';
@@ -70,7 +51,6 @@ const tiempoRelativo = (iso) => {
   return 'hace instantes';
 };
 
-// Normaliza los destinos de una publicación (incluye las históricas con carrera/anio sueltos)
 const destinosDe = (p) => {
   if (p.destinos && p.destinos.length > 0) {
     return p.destinos.map((d) => ({ carreraId: d.carrera?.id, carrera: d.carrera?.nombre, numero: d.anio?.numero }));
@@ -79,7 +59,6 @@ const destinosDe = (p) => {
   return [];
 };
 
-// Nombre de archivo a partir del título del anuncio: "Inscripciones abiertas" -> inscripciones-abiertas.jpg
 const nombreArchivo = (url, titulo) => {
   const ext = (url.split('?')[0].match(/\.(png|jpe?g|gif|webp|svg)$/i) || [])[1] || 'jpg';
   const base = (titulo || 'imagen')
@@ -88,8 +67,6 @@ const nombreArchivo = (url, titulo) => {
   return `${base || 'imagen'}.${ext}`;
 };
 
-// El atributo "download" se ignora en imágenes de otro dominio (Supabase), por eso se
-// baja el archivo como blob. Si el servidor no lo permite, se abre en una pestaña nueva.
 async function descargarImagen(url, titulo) {
   try {
     const res = await fetch(url);
@@ -111,14 +88,12 @@ async function descargarImagen(url, titulo) {
 const ordenarInscripciones = (insc = []) =>
   [...insc].sort((a, b) => a.carrera.localeCompare(b.carrera) || a.numero - b.numero);
 
-// Estilos de los botones de la barra superior: en celular muestran solo el ícono
 const botonCompacto = {
   minWidth: 0,
   px: { xs: 1, sm: 1.5 },
   '& .MuiButton-startIcon': { mr: { xs: 0, sm: '6px' }, ml: { xs: 0, sm: '-2px' } }
 };
 
-// Texto de un botón: se oculta en pantallas chicas (queda el ícono)
 const Etiqueta = ({ children }) => (
   <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{children}</Box>
 );
@@ -126,43 +101,55 @@ const Etiqueta = ({ children }) => (
 // ---------------------------------------------------------------- componente
 export default function VistaForo() {
   const navigate = useNavigate();
-
   const [perfil, setPerfil] = useState(null);
+  
+  // Estado para la paginación del servidor
   const [publicaciones, setPublicaciones] = useState([]);
+  const [pagina, setPagina] = useState(1); // 1-based para MUI Pagination
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [totalElementos, setTotalElementos] = useState(0);
+
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
-  const [imagenAbierta, setImagenAbierta] = useState(null); // { url, titulo }
-  const [pagina, setPagina] = useState(1); // página actual del feed (empieza en 1)
+  const [imagenAbierta, setImagenAbierta] = useState(null);
 
   const handleCerrarSesion = useCallback(() => {
     localStorage.removeItem('token');
     navigate('/');
   }, [navigate]);
 
-  // Si el backend responde 401, la sesión no sirve más
   const manejarError = useCallback((err, setter) => {
     if (err.status === 401) return handleCerrarSesion();
     setter(err.message || 'Ocurrió un error inesperado.');
   }, [handleCerrarSesion]);
 
-  // ------------------------------------------------------- carga principal
-  // silencioso = true: refresca sin spinner ni cartel de error (para el refresco automático)
-  const cargar = useCallback(async ({ silencioso = false } = {}) => {
+  // Función para pedir solo 5 elementos correspondientes a la página solicitada
+  const cargarPublicaciones = useCallback(async (nroPagina, { silencioso = false } = {}) => {
     if (!silencioso) {
       setCargando(true);
       setError('');
     }
     try {
-      const [p, pubs] = await Promise.all([
-        request('/usuarios/me'),
-        cargarTodasLasPublicaciones() // lectura pública: junta todas las páginas del backend
-      ]);
-      setPerfil(p);
-      setPublicaciones(pubs);
+      // Spring Data / APIs REST suelen usar page index basado en 0
+      const pageIndex = nroPagina - 1;
+      
+      // Enviamos auth: true por si el backend necesita el JWT para saber qué carrera filtrar
+      const data = await request(`/publicaciones?page=${pageIndex}&size=${POR_PAGINA}`, { auth: true });
+
+      if (Array.isArray(data)) {
+        // Fallback por si la API responde con un array directo
+        setPublicaciones(data);
+        setTotalPaginas(1);
+        setTotalElementos(data.length);
+      } else {
+        setPublicaciones(data?.content ?? []);
+        setTotalPaginas(data?.totalPages ?? 1);
+        setTotalElementos(data?.totalElements ?? 0);
+      }
     } catch (err) {
       if (silencioso) {
-        if (err.status === 401) handleCerrarSesion(); // sesión vencida: igual se cierra
-        return; // cualquier otro fallo: se conserva lo que ya se está mostrando
+        if (err.status === 401) handleCerrarSesion();
+        return;
       }
       if (err instanceof TypeError) {
         setError(`No se pudo conectar con ${API}. Revisá que el backend esté corriendo.`);
@@ -174,53 +161,42 @@ export default function VistaForo() {
     }
   }, [manejarError, handleCerrarSesion]);
 
+  // Carga inicial del perfil de usuario
   useEffect(() => {
-    if (!localStorage.getItem('token')) { navigate('/'); return; }
-    cargar();
-  }, [cargar, navigate]);
+    if (!localStorage.getItem('token')) {
+      navigate('/');
+      return;
+    }
+    request('/usuarios/me')
+      .then((p) => setPerfil(p))
+      .catch((err) => manejarError(err, setError));
+  }, [navigate, manejarError]);
 
-  // Refresco automático: si el administrador cambia los destinatarios de un anuncio,
-  // el alumno deja de verlo sin tener que apretar "Actualizar".
+  // Carga las publicaciones cada vez que cambia la página seleccionada
+  useEffect(() => {
+    cargarPublicaciones(pagina);
+  }, [pagina, cargarPublicaciones]);
+
+  // Refresco automático de la página actual cada 60s
   useEffect(() => {
     const refrescar = () => {
-      if (document.visibilityState === 'visible') cargar({ silencioso: true });
+      if (document.visibilityState === 'visible') {
+        cargarPublicaciones(pagina, { silencioso: true });
+      }
     };
-    const intervalo = setInterval(refrescar, 60000); // cada 60 segundos
-    document.addEventListener('visibilitychange', refrescar); // al volver a la pestaña
+    const intervalo = setInterval(refrescar, 60000);
+    document.addEventListener('visibilitychange', refrescar);
     window.addEventListener('focus', refrescar);
     return () => {
       clearInterval(intervalo);
       document.removeEventListener('visibilitychange', refrescar);
       window.removeEventListener('focus', refrescar);
     };
-  }, [cargar]);
+  }, [pagina, cargarPublicaciones]);
 
-  // --------------------------------------------------------------- filtrado
   const esEstudiante = perfil?.rol === 'ESTUDIANTE';
   const esAdmin = perfil?.rol === 'ADMINISTRADOR';
-  const inscripciones = useMemo(() => ordenarInscripciones(perfil?.inscripciones), [perfil]);
-
-  const feed = useMemo(() => {
-    const ahora = Date.now();
-    return publicaciones
-      .filter((p) => !p.fechaExpiracion || new Date(p.fechaExpiracion).getTime() > ahora)
-      .map((p) => {
-        const destinos = destinosDe(p);
-        // Destinos que le corresponden al estudiante (carrera + número de año)
-        const propios = destinos.filter((d) =>
-          inscripciones.some((i) => i.carreraId === d.carreraId && (d.numero == null || i.numero === d.numero))
-        );
-        return { ...p, propios };
-      })
-      .filter((p) => !esEstudiante || p.propios.length > 0)
-      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-  }, [publicaciones, inscripciones, esEstudiante]);
-
-  // Paginación en pantalla (sobre el feed ya filtrado)
-  const totalPaginas = Math.max(1, Math.ceil(feed.length / POR_PAGINA));
-  const paginaActual = Math.min(pagina, totalPaginas); // si el feed se achica al refrescar, no queda una página vacía
-  const desde = (paginaActual - 1) * POR_PAGINA;
-  const feedPagina = feed.slice(desde, desde + POR_PAGINA);
+  const inscripciones = ordenarInscripciones(perfil?.inscripciones);
 
   const cambiarPagina = (_, nueva) => {
     setPagina(nueva);
@@ -231,7 +207,6 @@ export default function VistaForo() {
     ? inscripciones.map((i) => `${i.carrera} • ${i.numero}° Año`).join('  /  ')
     : 'Sin carreras asignadas';
 
-  // El administrador no tiene carrera ni año: solo se muestra su nombre
   const textoEncabezado = !perfil
     ? 'Cargando perfil...'
     : esEstudiante
@@ -240,10 +215,12 @@ export default function VistaForo() {
 
   const abrirImagen = (p) => setImagenAbierta({ url: p.imagenUrl, titulo: p.titulo });
 
-  // ------------------------------------------------------------------ vista
+  // Cálculos de visualización de rango
+  const desde = (pagina - 1) * POR_PAGINA;
+  const hasta = desde + publicaciones.length;
+
   return (
     <Box sx={{ backgroundColor: '#f8fafc', minHeight: '100vh', pb: 6 }}>
-
       {/* BARRA SUPERIOR */}
       <Box sx={{ bgcolor: '#ffffff', borderBottom: '1px solid #e2e8f0', py: { xs: 1.5, md: 2 }, px: { xs: 2, md: 4 }, mb: { xs: 2.5, md: 4 }, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
         <Box sx={{ minWidth: 0, flex: 1 }}>
@@ -262,14 +239,12 @@ export default function VistaForo() {
               <Etiqueta>Panel de Administración</Etiqueta>
             </Button>
           )}
-          {/* Botón visible para TODOS los usuarios con sesión iniciada */}
           {perfil && (
             <Button variant="outlined" size="small" aria-label="Mi Perfil" startIcon={<Person />} onClick={() => navigate(RUTA_PERFIL)}
               sx={{ ...botonCompacto, color: '#f7a600', borderColor: '#f7a600', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#bc7e01', bgcolor: '#fffbeb', color: '#bc7e01' } }}>
               <Etiqueta>Mi Perfil</Etiqueta>
             </Button>
           )}
-
           <Button variant="outlined" size="small" aria-label="Cerrar Sesión" startIcon={<Logout />} onClick={handleCerrarSesion}
             sx={{ ...botonCompacto, color: '#475569', borderColor: '#cbd5e1', textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: '#94a3b8', bgcolor: '#f1f5f9' } }}>
             <Etiqueta>Cerrar Sesión</Etiqueta>
@@ -278,7 +253,6 @@ export default function VistaForo() {
       </Box>
 
       <Container maxWidth="md">
-
         {/* ENCABEZADO */}
         <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
           <Box>
@@ -290,84 +264,89 @@ export default function VistaForo() {
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Button size="small" startIcon={<Refresh />} onClick={() => cargar()} disabled={cargando} sx={{ textTransform: 'none', fontWeight: 600 }}>
+            <Button size="small" startIcon={<Refresh />} onClick={() => cargarPublicaciones(pagina)} disabled={cargando} sx={{ textTransform: 'none', fontWeight: 600 }}>
               Actualizar
             </Button>
           </Box>
         </Box>
 
         {error && <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>{error}</Alert>}
-
         {cargando && <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>}
 
-        {/* TARJETAS DE COMUNICADOS */}
-        {!cargando && feedPagina.map((p) => (
-          <Card key={p.id} sx={{ borderRadius: 2.5, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.05)', mb: 3, '&:hover': { boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.07)' } }}>
-            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: { xs: 1, sm: 2 }, mb: 1.5 }}>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, minWidth: 0, flex: 1 }}>
-                  {p.urgente && (
-                    <Chip label="Urgente" size="small" sx={{ bgcolor: '#ffe4e6', color: '#e11d48', fontWeight: 600, border: '1px solid #fecdd3' }} />
-                  )}
-                  {(p.propios.length ? p.propios : destinosDe(p)).map((d, i) => (
-                    <Chip key={i} size="small"
-                      label={`${d.carrera}${d.numero ? ` - ${d.numero}° Año` : ''}`}
-                      sx={{
-                        bgcolor: '#f1f5f9', color: '#334155', fontWeight: 600, fontSize: '0.75rem', border: '1px solid #e2e8f0',
-                        // En celular, los nombres largos de carrera se parten en varias líneas en vez de cortarse
-                        maxWidth: '100%', height: 'auto',
-                        '& .MuiChip-label': { whiteSpace: 'normal', py: 0.5 }
-                      }} />
-                  ))}
+        {/* LISTADO DE PUBLICACIONES (Vienen directo 5 del backend) */}
+        {!cargando && publicaciones.map((p) => {
+          const destinos = destinosDe(p);
+          const propios = esEstudiante
+            ? destinos.filter((d) => inscripciones.some((i) => i.carreraId === d.carreraId && (d.numero == null || i.numero === d.numero)))
+            : destinos;
+
+          return (
+            <Card key={p.id} sx={{ borderRadius: 2.5, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.05)', mb: 3, '&:hover': { boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.07)' } }}>
+              <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: { xs: 1, sm: 2 }, mb: 1.5 }}>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, minWidth: 0, flex: 1 }}>
+                    {p.urgente && (
+                      <Chip label="Urgente" size="small" sx={{ bgcolor: '#ffe4e6', color: '#e11d48', fontWeight: 600, border: '1px solid #fecdd3' }} />
+                    )}
+                    {(propios.length ? propios : destinos).map((d, i) => (
+                      <Chip
+                        key={i}
+                        size="small"
+                        label={`${d.carrera}${d.numero ? ` • ${d.numero}° Año` : ''}`}
+                        sx={{
+                          bgcolor: '#f1f5f9', color: '#334155', fontWeight: 600, fontSize: '0.75rem', border: '1px solid #e2e8f0',
+                          maxWidth: '100%', height: 'auto',
+                          '& .MuiChip-label': { whiteSpace: 'normal', py: 0.5 }
+                        }}
+                      />
+                    ))}
+                  </Box>
+                  <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 500, flexShrink: 0 }}>
+                    {tiempoRelativo(p.fecha)}
+                  </Typography>
                 </Box>
-                <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 500, flexShrink: 0 }}>
-                  {tiempoRelativo(p.fecha)}
+                <Typography variant="h6" sx={{ fontWeight: 700, color: '#0f172a', mb: 1, fontSize: '1.05rem', lineHeight: 1.4, overflowWrap: 'anywhere' }}>
+                  {p.titulo}
                 </Typography>
-              </Box>
+                <Typography variant="body2" sx={{ color: '#475569', mb: 2, lineHeight: 1.65, whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}>
+                  {p.mensaje}
+                </Typography>
+                {p.imagenUrl && (
+                  <Box
+                    component="img"
+                    src={p.imagenUrl}
+                    alt={p.titulo}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => abrirImagen(p)}
+                    onKeyDown={(e) => e.key === 'Enter' && abrirImagen(p)}
+                    sx={{
+                      maxWidth: '100%', maxHeight: { xs: 240, sm: 320 }, borderRadius: 1.5, mb: 2, display: 'block',
+                      cursor: 'zoom-in', transition: 'opacity 0.15s', '&:hover': { opacity: 0.92 }
+                    }}
+                  />
+                )}
+                {p.archivoUrl && (
+                  <Link href={p.archivoUrl} target="_blank" rel="noopener noreferrer" underline="hover"
+                    sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mb: 2, fontSize: '0.875rem', maxWidth: '100%', overflowWrap: 'anywhere' }}>
+                    <AttachFile fontSize="small" /> {p.archivoNombre || 'Ver archivo adjunto'}
+                  </Link>
+                )}
+                <Divider sx={{ my: 1.5, borderColor: '#f1f5f9' }} />
+                <Typography variant="caption" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                  Publicado por: Administrador Institucional
+                </Typography>
+              </CardContent>
+            </Card>
+          );
+        })}
 
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#0f172a', mb: 1, fontSize: '1.05rem', lineHeight: 1.4, overflowWrap: 'anywhere' }}>
-                {p.titulo}
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#475569', mb: 2, lineHeight: 1.65, whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}>
-                {p.mensaje}
-              </Typography>
-
-              {p.imagenUrl && (
-                <Box
-                  component="img"
-                  src={p.imagenUrl}
-                  alt={p.titulo}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => abrirImagen(p)}
-                  onKeyDown={(e) => e.key === 'Enter' && abrirImagen(p)}
-                  sx={{
-                    maxWidth: '100%', maxHeight: { xs: 240, sm: 320 }, borderRadius: 1.5, mb: 2, display: 'block',
-                    cursor: 'zoom-in', transition: 'opacity 0.15s', '&:hover': { opacity: 0.92 }
-                  }}
-                />
-              )}
-              {p.archivoUrl && (
-                <Link href={p.archivoUrl} target="_blank" rel="noopener noreferrer" underline="hover"
-                  sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mb: 2, fontSize: '0.875rem', maxWidth: '100%', overflowWrap: 'anywhere' }}>
-                  <AttachFile fontSize="small" /> {p.archivoNombre || 'Ver archivo adjunto'}
-                </Link>
-              )}
-
-              <Divider sx={{ my: 1.5, borderColor: '#f1f5f9' }} />
-              <Typography variant="caption" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
-                Publicado por: Administrador Institucional
-              </Typography>
-            </CardContent>
-          </Card>
-        ))}
-
-        {/* PAGINACIÓN */}
+        {/* PAGINACIÓN CON DATOS DEL SERVIDOR */}
         {!cargando && totalPaginas > 1 && (
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1, mb: 2 }}>
             <Pagination
               count={totalPaginas}
-              page={paginaActual}
+              page={pagina}
               onChange={cambiarPagina}
               shape="rounded"
               siblingCount={0}
@@ -380,13 +359,13 @@ export default function VistaForo() {
           </Box>
         )}
 
-        {/* FIN DE FEED */}
+        {/* ESTADO / TOTALES */}
         {!cargando && (
           <Paper sx={{ p: 3, borderRadius: 2, textAlign: 'center', bgcolor: 'transparent', boxShadow: 'none' }}>
             <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 500 }}>
-              {feed.length === 0
+              {publicaciones.length === 0
                 ? (esEstudiante ? 'Todavía no hay publicaciones para tu carrera y año.' : 'Todavía no hay publicaciones.')
-                : `Mostrando ${desde + 1}–${desde + feedPagina.length} de ${feed.length} publicaciones`}
+                : `Mostrando ${desde + 1}–${hasta} de ${totalElementos} publicaciones`}
             </Typography>
           </Paper>
         )}
@@ -429,7 +408,6 @@ export default function VistaForo() {
           />
         )}
       </Dialog>
-
     </Box>
   );
 }
