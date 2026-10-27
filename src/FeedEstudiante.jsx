@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Box, Container, Typography, Card, CardContent, Button, Chip, Divider, Paper,
   Alert, CircularProgress, Link, Dialog, IconButton, Pagination
@@ -40,6 +40,11 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   });
   if (!res.ok) throw new ApiError(res.status, mensajePorEstado(res.status, await res.text()));
   return res.json();
+}
+
+// Pide una página al backend enviando auth para que sepa qué usuario es (page en base 0)
+async function pedirPublicaciones(numeroPagina) {
+  return request(`/publicaciones?page=${numeroPagina - 1}&size=${POR_PAGINA}`, { auth: true });
 }
 
 const tiempoRelativo = (iso) => {
@@ -109,11 +114,17 @@ const Etiqueta = ({ children }) => (
 export default function VistaForo() {
   const navigate = useNavigate();
   const [perfil, setPerfil] = useState(null);
-  const [todasLasPublicaciones, setTodasLasPublicaciones] = useState([]);
-  const [cargando, setCargando] = useState(true);
+
+  // Estados de feed idénticos al EditorAnuncios
+  const [anunciosFeed, setAnunciosFeed] = useState([]);
+  const [cargandoFeed, setCargandoFeed] = useState(false);
+  const [pagina, setPagina] = useState(1);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [totalAnuncios, setTotalAnuncios] = useState(0);
+
   const [error, setError] = useState('');
   const [imagenAbierta, setImagenAbierta] = useState(null);
-  const [pagina, setPagina] = useState(1);
+  const feedRef = useRef(null);
 
   const handleCerrarSesion = useCallback(() => {
     localStorage.removeItem('token');
@@ -125,22 +136,54 @@ export default function VistaForo() {
     setter(err.message || 'Ocurrió un error inesperado.');
   }, [handleCerrarSesion]);
 
-  // Carga inicial y refresco
-  const cargar = useCallback(async ({ silencioso = false } = {}) => {
+  // Carga del perfil de usuario
+  useEffect(() => {
+    if (!localStorage.getItem('token')) {
+      navigate('/');
+      return;
+    }
+    request('/usuarios/me')
+      .then((p) => setPerfil(p))
+      .catch((err) => manejarError(err, setError));
+  }, [navigate, manejarError]);
+
+  // Función idéntica a cargarFeed del panel admin
+  const cargarFeed = useCallback(async (paginaPedida = 1, { silencioso = false } = {}) => {
     if (!silencioso) {
-      setCargando(true);
+      setCargandoFeed(true);
       setError('');
     }
     try {
-      const [resPerfil, resPubs] = await Promise.all([
-        request('/usuarios/me'),
-        request('/publicaciones', { auth: true })
-      ]);
-      setPerfil(resPerfil);
+      let numero = paginaPedida;
+      let data = await pedirPublicaciones(numero);
 
-      // Acepta tanto lista directa como Page de Spring (resPubs.content)
-      const lista = Array.isArray(resPubs) ? resPubs : (resPubs?.content ?? []);
-      setTodasLasPublicaciones(lista);
+      if (Array.isArray(data)) {
+        // Backend sin paginar (devuelve lista completa): respaldamos paginando en memoria
+        setTotalAnuncios(data.length);
+        setTotalPaginas(Math.max(1, Math.ceil(data.length / POR_PAGINA)));
+        setAnunciosFeed(data.slice((numero - 1) * POR_PAGINA, numero * POR_PAGINA));
+      } else {
+        // Backend paginado con Spring Page
+        const total = Math.max(1, data?.totalPages ?? 1);
+        if (numero > total) {
+          numero = total;
+          data = await pedirPublicaciones(numero);
+        }
+
+        // Si el backend devolvió todo el array en data.content sin recortar (ignora size=5),
+        // se recorta a 5 como reaseguro:
+        const listaBruta = data?.content ?? [];
+        if (listaBruta.length > POR_PAGINA && (data?.totalPages ?? 1) === 1) {
+          setTotalAnuncios(listaBruta.length);
+          setTotalPaginas(Math.max(1, Math.ceil(listaBruta.length / POR_PAGINA)));
+          setAnunciosFeed(listaBruta.slice((numero - 1) * POR_PAGINA, numero * POR_PAGINA));
+        } else {
+          setTotalAnuncios(data?.totalElements ?? 0);
+          setTotalPaginas(total);
+          setAnunciosFeed(listaBruta);
+        }
+      }
+      setPagina(numero);
     } catch (err) {
       if (silencioso) {
         if (err.status === 401) handleCerrarSesion();
@@ -152,22 +195,21 @@ export default function VistaForo() {
         manejarError(err, setError);
       }
     } finally {
-      if (!silencioso) setCargando(false);
+      if (!silencioso) setCargandoFeed(false);
     }
   }, [manejarError, handleCerrarSesion]);
 
+  // Carga inicial
   useEffect(() => {
-    if (!localStorage.getItem('token')) {
-      navigate('/');
-      return;
-    }
-    cargar();
-  }, [cargar, navigate]);
+    cargarFeed(1);
+  }, [cargarFeed]);
 
-  // Intervalo de auto-refresco
+  // Auto-refresco en segundo plano cada 60s
   useEffect(() => {
     const refrescar = () => {
-      if (document.visibilityState === 'visible') cargar({ silencioso: true });
+      if (document.visibilityState === 'visible') {
+        cargarFeed(pagina, { silencioso: true });
+      }
     };
     const intervalo = setInterval(refrescar, 60000);
     document.addEventListener('visibilitychange', refrescar);
@@ -177,42 +219,16 @@ export default function VistaForo() {
       document.removeEventListener('visibilitychange', refrescar);
       window.removeEventListener('focus', refrescar);
     };
-  }, [cargar]);
+  }, [pagina, cargarFeed]);
 
-  // -------------------------------------------------- filtrado y paginación
+  const cambiarPagina = async (_, nueva) => {
+    await cargarFeed(nueva);
+    feedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const esEstudiante = perfil?.rol === 'ESTUDIANTE';
   const esAdmin = perfil?.rol === 'ADMINISTRADOR';
   const inscripciones = useMemo(() => ordenarInscripciones(perfil?.inscripciones), [perfil]);
-
-  // 1. Filtrar por fecha de expiración y por carrera/año
-  const feedFiltrado = useMemo(() => {
-    const ahora = Date.now();
-
-    return todasLasPublicaciones
-      .filter((p) => !p.fechaExpiracion || new Date(p.fechaExpiracion).getTime() > ahora)
-      .map((p) => {
-        const destinos = destinosDe(p);
-        // Coincidencia exacta con las inscripciones del estudiante
-        const propios = destinos.filter((d) =>
-          inscripciones.some((i) => i.carreraId === d.carreraId && (d.numero == null || i.numero === d.numero))
-        );
-        return { ...p, propios };
-      })
-      // Si es estudiante, solo pasan las que tienen al menos un destino propio
-      .filter((p) => !esEstudiante || p.propios.length > 0)
-      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-  }, [todasLasPublicaciones, inscripciones, esEstudiante]);
-
-  // 2. Paginar de a 5 sobre el feed ya filtrado
-  const totalPaginas = Math.max(1, Math.ceil(feedFiltrado.length / POR_PAGINA));
-  const paginaActual = Math.min(pagina, totalPaginas);
-  const desde = (paginaActual - 1) * POR_PAGINA;
-  const feedPagina = feedFiltrado.slice(desde, desde + POR_PAGINA);
-
-  const cambiarPagina = (_, nueva) => {
-    setPagina(nueva);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
 
   const resumenCarreras = inscripciones.length
     ? inscripciones.map((i) => `${i.carrera} • ${i.numero}° Año`).join('  /  ')
@@ -224,7 +240,7 @@ export default function VistaForo() {
       ? `${perfil.nombre} ${perfil.apellido} — ${resumenCarreras}`
       : `${perfil.nombre} ${perfil.apellido}`;
 
-  const abrirImagen = (p) => setImagenAbierta({ url: p.imagenUrl, titulo: p.titulo });
+  const abrirImagen = (anuncio) => setImagenAbierta({ url: anuncio.imagenUrl, titulo: anuncio.titulo });
 
   return (
     <Box sx={{ backgroundColor: '#f8fafc', minHeight: '100vh', pb: 6 }}>
@@ -277,7 +293,7 @@ export default function VistaForo() {
         </Box>
       </Box>
 
-      <Container maxWidth="md">
+      <Container maxWidth="md" ref={feedRef} sx={{ scrollMarginTop: 16 }}>
         {/* ENCABEZADO DE SECCIÓN */}
         <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
           <Box>
@@ -289,19 +305,34 @@ export default function VistaForo() {
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Button size="small" startIcon={<Refresh />} onClick={() => cargar()} disabled={cargando} sx={{ textTransform: 'none', fontWeight: 600 }}>
+            <Button
+              size="small"
+              startIcon={<Refresh />}
+              onClick={() => cargarFeed(pagina)}
+              disabled={cargandoFeed}
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+            >
               Actualizar
             </Button>
           </Box>
         </Box>
 
         {error && <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>{error}</Alert>}
-        {cargando && <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>}
+        {cargandoFeed && <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>}
 
-        {/* LISTADO EXACTO DE 5 TARJETAS POR PÁGINA */}
-        {!cargando && feedPagina.map((p) => {
+        {/* FEED DE PUBLICACIONES */}
+        {!cargandoFeed && anunciosFeed.length === 0 && (
+          <Typography variant="body2" sx={{ color: '#64748b', textAlign: 'center', py: 4 }}>
+            {esEstudiante ? 'Todavía no hay publicaciones para tu carrera y año.' : 'Todavía no hay publicaciones.'}
+          </Typography>
+        )}
+
+        {!cargandoFeed && anunciosFeed.map((p) => {
           const destinos = destinosDe(p);
-          const chipsDestinos = p.propios.length ? p.propios : destinos;
+          const propios = esEstudiante
+            ? destinos.filter((d) => inscripciones.some((i) => i.carreraId === d.carreraId && (d.numero == null || i.numero === d.numero)))
+            : destinos;
+          const chipsDestinos = propios.length ? propios : destinos;
 
           return (
             <Card key={p.id} sx={{ borderRadius: 2.5, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.05)', mb: 3, '&:hover': { boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.07)' } }}>
@@ -328,12 +359,14 @@ export default function VistaForo() {
                     {tiempoRelativo(p.fecha)}
                   </Typography>
                 </Box>
+
                 <Typography variant="h6" sx={{ fontWeight: 700, color: '#0f172a', mb: 1, fontSize: '1.05rem', lineHeight: 1.4, overflowWrap: 'anywhere' }}>
                   {p.titulo}
                 </Typography>
                 <Typography variant="body2" sx={{ color: '#475569', mb: 2, lineHeight: 1.65, whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}>
                   {p.mensaje}
                 </Typography>
+
                 {p.imagenUrl && (
                   <Box
                     component="img"
@@ -349,6 +382,7 @@ export default function VistaForo() {
                     }}
                   />
                 )}
+
                 {p.archivoUrl && (
                   <Link
                     href={p.archivoUrl}
@@ -360,6 +394,7 @@ export default function VistaForo() {
                     <AttachFile fontSize="small" /> {p.archivoNombre || 'Ver archivo adjunto'}
                   </Link>
                 )}
+
                 <Divider sx={{ my: 1.5, borderColor: '#f1f5f9' }} />
                 <Typography variant="caption" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
                   Publicado por: Administrador Institucional
@@ -369,13 +404,14 @@ export default function VistaForo() {
           );
         })}
 
-        {/* PAGINACIÓN */}
-        {!cargando && totalPaginas > 1 && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1, mb: 2 }}>
+        {/* PAGINACIÓN CON EL MISMO ESTILO Y LÓGICA QUE EN EDITOR */}
+        {totalPaginas > 1 && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, mt: 1, mb: 2 }}>
             <Pagination
               count={totalPaginas}
-              page={paginaActual}
+              page={pagina}
               onChange={cambiarPagina}
+              disabled={cargandoFeed}
               shape="rounded"
               siblingCount={0}
               sx={{
@@ -384,22 +420,14 @@ export default function VistaForo() {
                 '& .MuiPaginationItem-root.Mui-selected:hover': { bgcolor: '#bc7e01' }
               }}
             />
-          </Box>
-        )}
-
-        {/* INFORMACIÓN DEL FEED */}
-        {!cargando && (
-          <Paper sx={{ p: 3, borderRadius: 2, textAlign: 'center', bgcolor: 'transparent', boxShadow: 'none' }}>
-            <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 500 }}>
-              {feedFiltrado.length === 0
-                ? (esEstudiante ? 'Todavía no hay publicaciones para tu carrera y año.' : 'Todavía no hay publicaciones.')
-                : `Mostrando ${desde + 1}–${desde + feedPagina.length} de ${feedFiltrado.length} publicaciones`}
+            <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 500 }}>
+              Página {pagina} de {totalPaginas} · {totalAnuncios} publicaciones en total
             </Typography>
-          </Paper>
+          </Box>
         )}
       </Container>
 
-      {/* VISOR MODAL DE IMAGEN */}
+      {/* VISOR DE IMAGEN */}
       <Dialog
         open={Boolean(imagenAbierta)}
         onClose={() => setImagenAbierta(null)}
