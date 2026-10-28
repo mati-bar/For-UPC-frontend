@@ -73,10 +73,6 @@ export default function GestionAlumnos() {
   const editando = idEdicion !== null;
 
   // GET /usuarios?page=N&size=10 (page empieza en 0 en el backend).
-  // Funciona con los dos formatos posibles:
-  //  - Backend paginado (Page de Spring): se pide solo la página necesaria.
-  //  - Backend que devuelve la lista completa: se corta acá, en pantalla.
-  // silencioso = true: no muestra el spinner de la tabla.
   const cargarAlumnos = useCallback(async (paginaPedida = 1, silencioso = false) => {
     try {
       if (!silencioso) setCargando(true);
@@ -88,7 +84,6 @@ export default function GestionAlumnos() {
 
       if (esPaginado(data)) {
         const total = Math.max(1, data.totalPages ?? 1);
-        // Si la página pedida ya no existe (por ejemplo, se borró el último alumno de la última página)
         if (numero > total) {
           numero = total;
           data = (await pedir(numero)).data;
@@ -129,7 +124,7 @@ export default function GestionAlumnos() {
     setMostrarFormulario(false);
   };
 
-  // GET /carreras (solo la primera vez que se abre el formulario). Devuelve la lista para usarla enseguida.
+  // GET /carreras (solo la primera vez que se abre el formulario)
   const cargarCarreras = async () => {
     if (carreras.length > 0) return carreras;
     try {
@@ -144,7 +139,6 @@ export default function GestionAlumnos() {
     }
   };
 
-  // Botón superior: abre el formulario de alta o lo cierra (y cancela una edición en curso)
   const handleToggleFormulario = () => {
     if (mostrarFormulario) {
       resetFormulario();
@@ -165,7 +159,6 @@ export default function GestionAlumnos() {
 
   const handleCambiarCarreras = async (ids) => {
     setCarrerasElegidas(ids);
-    // Quitar el año elegido de las carreras destildadas
     setAnioElegido((prev) =>
       Object.fromEntries(Object.entries(prev).filter(([cid]) => ids.includes(Number(cid))))
     );
@@ -179,15 +172,12 @@ export default function GestionAlumnos() {
 
   const setCampo = (campo) => (e) => setForm({ ...form, [campo]: e.target.value });
 
-  // Abre el formulario con los datos del alumno: nombre y apellido, y sus carreras y años actuales
-  // ya seleccionados (se pueden cambiar o agregar otras). El email se muestra sin poder editarse.
   const handleEditar = async (alumno) => {
     setErrorMsg(null);
     setExitoMsg(null);
     try {
       const listaCarreras = await cargarCarreras();
 
-      // Pares carrera/año actuales del alumno (si no viniera carreraId, se busca por nombre de carrera)
       const pares = (alumno.inscripciones ?? [])
         .map((i) => ({
           carreraId: i.carreraId ?? listaCarreras.find((c) => c.nombre === i.carrera)?.id,
@@ -198,7 +188,6 @@ export default function GestionAlumnos() {
       const idsCarrera = [...new Set(pares.map((p) => p.carreraId))];
       await Promise.all(idsCarrera.map(cargarAnios));
 
-      // Un solo año por carrera
       const seleccion = {};
       pares.forEach((p) => { seleccion[p.carreraId] = p.anioCarreraId; });
 
@@ -220,7 +209,6 @@ export default function GestionAlumnos() {
     }
   };
 
-  // PUT /usuarios/{id} (edición) o POST /auth/registro (alta)
   const handleGuardar = async (e) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -232,7 +220,7 @@ export default function GestionAlumnos() {
       return setErrorMsg('Elegí el año de cada carrera seleccionada.');
     }
 
-    // ---- EDICIÓN: nombre, apellido, carreras y años (el email se reenvía sin cambios)
+    // ---- EDICIÓN
     if (editando) {
       const nombre = form.nombre.trim();
       const apellido = form.apellido.trim();
@@ -243,11 +231,10 @@ export default function GestionAlumnos() {
 
       setGuardando(true);
       try {
-        // El backend espera la lista de ids (anioCarreraIds), no objetos
         await api.put(RUTA_EDITAR(idEdicion), { nombre, apellido, email, anioCarreraIds: idsAnio });
         resetFormulario();
         setExitoMsg('Cambios guardados.');
-        await cargarAlumnos(pagina, true); // recarga la página actual: la lista refleja lo guardado en el backend
+        await cargarAlumnos(pagina, true);
       } catch (error) {
         console.error('Error al guardar alumno:', error);
         setErrorMsg(mensajeDeError(error, 'No se pudieron guardar los cambios.'));
@@ -282,7 +269,6 @@ export default function GestionAlumnos() {
     }
   };
 
-  // DELETE /usuarios/{id}
   const handleEliminar = async (alumno) => {
     if (!window.confirm(`¿Estás seguro de que querés eliminar a ${alumno.nombre} ${alumno.apellido}?`)) return;
 
@@ -290,9 +276,8 @@ export default function GestionAlumnos() {
     setExitoMsg(null);
     try {
       await api.delete(RUTA_ELIMINAR(alumno.id));
-      if (idEdicion === alumno.id) resetFormulario(); // si justo se estaba editando, se cierra el formulario
+      if (idEdicion === alumno.id) resetFormulario();
       setExitoMsg('Alumno eliminado.');
-      // Recarga la página actual; si quedó vacía, vuelve a la anterior
       await cargarAlumnos(pagina, true);
     } catch (error) {
       console.error('Error al eliminar alumno:', error);
@@ -301,9 +286,6 @@ export default function GestionAlumnos() {
   };
 
   const nombreCarrera = (id) => carreras.find((c) => c.id === id)?.nombre ?? id;
-
-  const desde = totalAlumnos === 0 ? 0 : (pagina - 1) * POR_PAGINA + 1;
-  const hasta = (pagina - 1) * POR_PAGINA + alumnos.length;
 
   return (
     <Box>
@@ -347,7 +329,6 @@ export default function GestionAlumnos() {
               </Box>
 
               {editando ? (
-                /* EDICIÓN: el email solo se muestra. No hay campo de contraseña. */
                 <TextField
                   label="Email"
                   size="small"
@@ -357,7 +338,6 @@ export default function GestionAlumnos() {
                   helperText="El email no se puede modificar."
                 />
               ) : (
-                /* ALTA: email y contraseña */
                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   <TextField label="Email" type="email" required size="small" sx={{ flex: 1, minWidth: 200 }}
                     value={form.email} onChange={setCampo('email')} disabled={guardando} />
@@ -366,7 +346,7 @@ export default function GestionAlumnos() {
                 </Box>
               )}
 
-              {/* CARRERAS Y AÑOS (alta y edición): se pueden cambiar o agregar otras carreras */}
+              {/* CARRERAS */}
               <FormControl size="small" fullWidth>
                 <InputLabel>Carreras</InputLabel>
                 <Select
@@ -389,7 +369,7 @@ export default function GestionAlumnos() {
                 </Select>
               </FormControl>
 
-              {/* Un solo año por carrera */}
+              {/* AÑOS POR CARRERA */}
               {carrerasElegidas.map((cid) => (
                 <FormControl size="small" fullWidth key={cid}>
                   <InputLabel>{`Año - ${nombreCarrera(cid)}`}</InputLabel>
@@ -499,25 +479,24 @@ export default function GestionAlumnos() {
         </Table>
       </TableContainer>
 
-      {/* PAGINACIÓN */}
-      {!cargando && totalAlumnos > 0 && (
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, mt: 3, mb: 2 }}>
-          {totalPaginas > 1 && (
-            <Pagination
-              count={totalPaginas}
-              page={pagina}
-              onChange={cambiarPagina}
-              shape="rounded"
-              siblingCount={1}
-              sx={{
-                '& .MuiPaginationItem-root': { fontWeight: 600, color: '#475569' },
-                '& .MuiPaginationItem-root.Mui-selected': { bgcolor: '#f7a600', color: '#fff' },
-                '& .MuiPaginationItem-root.Mui-selected:hover': { bgcolor: '#bc7e01' }
-              }}
-            />
-          )}
+      {/* PAGINACIÓN CON EL MISMO ESTILO Y LÓGICA QUE EN FEED ESTUDIANTES */}
+      {totalPaginas > 1 && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, mt: 1, mb: 2 }}>
+          <Pagination
+            count={totalPaginas}
+            page={pagina}
+            onChange={cambiarPagina}
+            disabled={cargando}
+            shape="rounded"
+            siblingCount={0}
+            sx={{
+              '& .MuiPaginationItem-root': { fontWeight: 600, color: '#475569' },
+              '& .MuiPaginationItem-root.Mui-selected': { bgcolor: '#f7a600', color: '#fff' },
+              '& .MuiPaginationItem-root.Mui-selected:hover': { bgcolor: '#bc7e01' }
+            }}
+          />
           <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 500 }}>
-            Mostrando {desde}–{hasta} de {totalAlumnos} alumnos
+            Página {pagina} de {totalPaginas} · {totalAlumnos} alumnos en total
           </Typography>
         </Box>
       )}
