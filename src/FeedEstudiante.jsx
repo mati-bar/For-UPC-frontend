@@ -278,13 +278,7 @@ export default function VistaForo() {
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {!cargando && !error && (
-              <Chip
-                icon={<FiberManualRecord sx={{ fontSize: '10px !important', color: '#10b981 !important' }} />}
-                label="Feed Actualizado" size="small"
-                sx={{ bgcolor: '#ecfdf5', color: '#065f46', fontWeight: 600, border: '1px solid #a7f3d0' }}
-              />
-            )}
+
             <Button size="small" startIcon={<Refresh />} onClick={() => cargar()} disabled={cargando} sx={{ textTransform: 'none', fontWeight: 600 }}>
               Actualizar
             </Button>
