@@ -1,16 +1,61 @@
-# React + Vite
+# FOR UPC - Portal Informativo Académico (Frontend)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Plataforma web desarrollada para la comunidad universitaria de la Universidad Provincial de Córdoba (Sede Laboulaye). El sistema cuenta con dos roles principales: los estudiantes, que pueden registrarse, iniciar sesión y acceder a un feed de novedades específicas de su carrera; y los administradores, encargados de gestionar a los usuarios y publicar los anuncios académicos en la plataforma.
 
-Currently, two official plugins are available:
+## Tecnologías Utilizadas
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+* **Framework:** React.js con Vite
+* **Librería de Componentes:** Material-UI (MUI)
+* **Enrutamiento:** React Router DOM
+* **Estado Global:** Redux Toolkit
+* **Cliente HTTP:** Axios
+* **Testing E2E:** Playwright
 
-## React Compiler
+##  Enlaces del Despliegue
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+* **Frontend (Vercel):** [for-upc-frontend.vercel.app]
+* **Backend (Render):** [Pegar acá el link del backend de Render]
+* **Swagger (Documentación API):** [Pegar acá el link de Swagger]
 
-## Expanding the ESLint configuration
+##  Usuarios de Prueba
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Para probar el sistema sin necesidad de registrarse, utilizar las siguientes credenciales:
+
+* **Administrador:**
+  * Email: [email_admin_prueba]
+  * Contraseña: [password_admin_prueba]
+
+* **Estudiante:**
+  * Email: [email_estudiante_prueba]
+  * Contraseña: [password_estudiante_prueba]
+
+##  Cómo correr el proyecto en local
+
+1. Clonar el repositorio y entrar a la carpeta:
+git clone https://github.com/[usuario]/[repositorio].git
+cd For-UPC-frontend
+
+2. Instalar las dependencias:
+npm install
+
+3. Configurar Variables de Entorno:
+Crear un archivo .env en la raíz del proyecto copiando la estructura de .env.example.
+Ejemplo de .env:
+VITE_API_URL=http://localhost:8080
+
+4. Ejecutar el servidor de desarrollo:
+npm run dev
+
+El proyecto estará disponible en http://localhost:5173.
+
+##  Pruebas Automatizadas (Playwright)
+
+El proyecto cuenta con pruebas End-to-End para verificar el flujo de autenticación y protección de rutas. 
+
+Para ejecutar las pruebas en modo oculto (consola):
+npx playwright test
+
+Para ejecutar las pruebas visualmente (UI interactiva):
+npx playwright test --ui
+
+(Nota: El backend local debe estar corriendo para que las pruebas de login pasen exitosamente).
