@@ -1,16 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Box, Card, CardContent, Typography, TextField, Button,
+import { 
+  Box, Card, CardContent, Typography, TextField, Button, 
   Tabs, Tab, Container, MenuItem, FormControl, InputLabel, Select,
-  Alert, IconButton, InputAdornment, Paper
+  Alert, IconButton, InputAdornment 
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
-import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
-import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
 import logoUPC from './assets/logo-sede-laboulaye.png';
@@ -26,26 +22,6 @@ const orangeTheme = createTheme({
     },
   },
 });
-
-// Campos del registro con esquinas más redondeadas
-const estiloCampo = { '& .MuiOutlinedInput-root': { borderRadius: 2 } };
-
-// Ícono gris a la izquierda de un campo
-const iconoInicio = (Icono) => (
-  <InputAdornment position="start">
-    <Icono fontSize="small" sx={{ color: '#94a3b8' }} />
-  </InputAdornment>
-);
-
-// Título de sección del formulario de registro
-const TituloSeccion = ({ children }) => (
-  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-    <Box sx={{ width: 4, height: 16, bgcolor: '#f7a600', borderRadius: 1 }} />
-    <Typography variant="overline" sx={{ fontWeight: 700, color: '#475569', letterSpacing: '0.08em', lineHeight: 1.2 }}>
-      {children}
-    </Typography>
-  </Box>
-);
 
 export default function Login() {
   const [tabValue, setTabValue] = useState(0);
@@ -66,7 +42,7 @@ export default function Login() {
 
   // Estados para los catálogos dinámicos
   const [listaCarreras, setListaCarreras] = useState([]);
-
+  
   // Estado para manejar las filas de inscripción: [{ carreraId: '', anioCarreraId: '', aniosDisponibles: [] }]
   const [selecciones, setSelecciones] = useState([
     { carreraId: '', anioCarreraId: '', aniosDisponibles: [] }
@@ -74,24 +50,10 @@ export default function Login() {
 
   // Estado para mostrar/ocultar contraseña
   const [mostrarPassword, setMostrarPassword] = useState(false);
-
+  
   const handleClickMostrarPassword = () => {
     setMostrarPassword(!mostrarPassword);
   };
-
-  // Botón del ojito (se usa en los dos formularios). onMouseDown evita que el campo pierda el foco.
-  const botonOjo = (
-    <InputAdornment position="end">
-      <IconButton
-        aria-label={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-        onClick={handleClickMostrarPassword}
-        onMouseDown={(e) => e.preventDefault()}
-        edge="end"
-      >
-        {mostrarPassword ? <VisibilityOff /> : <Visibility />}
-      </IconButton>
-    </InputAdornment>
-  );
 
   // Cargar las carreras al iniciar la pantalla
   useEffect(() => {
@@ -165,7 +127,7 @@ export default function Login() {
       if (respuesta.ok) {
         const data = await respuesta.json();
         localStorage.setItem('token', data.token);
-        navigate('/feed');
+        navigate('/feed'); 
       } else {
         const mensajeError = await respuesta.text();
         setError(mensajeError || 'Email o contraseña incorrectos.');
@@ -236,45 +198,55 @@ export default function Login() {
           </Box>
 
           <Card sx={{ borderRadius: 4, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}>
-            <Tabs
-              value={tabValue}
-              onChange={handleTabChange}
-              variant="fullWidth"
-              sx={{
-                borderBottom: '1px solid #e2e8f0',
-                '& .MuiTabs-indicator': { backgroundColor: '#f7a600 !important', height: 3 },
-                '& .MuiTab-root': { color: 'gray', fontWeight: 'bold', '&.Mui-selected': { color: '#f7a600 !important' } }
+            <Tabs 
+              value={tabValue} 
+              onChange={handleTabChange} 
+              variant="fullWidth" 
+              sx={{ 
+                borderBottom: '1px solid #e2e8f0', 
+                '& .MuiTabs-indicator': { backgroundColor: '#f7a600 !important', height: 3 }, 
+                '& .MuiTab-root': { color: 'gray', fontWeight: 'bold', '&.Mui-selected': { color: '#f7a600 !important' } } 
               }}
             >
               <Tab label="Iniciar Sesión" />
               <Tab label="Registrarse" />
             </Tabs>
 
-            <CardContent sx={{ p: { xs: 2.5, sm: 4 } }}>
+            <CardContent sx={{ p: 4 }}>
               {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
               {exito && <Alert severity="success" sx={{ mb: 2 }}>{exito}</Alert>}
-
+              
               {tabValue === 0 && (
                 <Box component="form" onSubmit={handleLoginSubmit} sx={{ color: '#000000', display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <Typography variant="body2" color="text.secondary">Ingresá con tu correo institucional para acceder a las novedades de tu carrera.</Typography>
                   <TextField label="Correo electrónico" type="email" fullWidth required size="small" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} />
+                  
+                  <TextField 
+  label="Contraseña" 
+  type={mostrarPassword ? 'text' : 'password'} 
+  fullWidth 
+  required 
+  size="small" 
+  value={loginPassword} 
+  onChange={(e) => setLoginPassword(e.target.value)} 
+  slotProps={{
+    input: {
+      endAdornment: (
+        <InputAdornment position="end">
+          <IconButton onClick={handleClickMostrarPassword} edge="end">
+            {mostrarPassword ? <VisibilityOff /> : <Visibility />}
+          </IconButton>
+        </InputAdornment>
+      ),
+    }
+  }}
+/>
 
-                  <TextField
-                    label="Contraseña"
-                    type={mostrarPassword ? 'text' : 'password'}
-                    fullWidth
-                    required
-                    size="small"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    slotProps={{ input: { endAdornment: botonOjo } }}
-                  />
-
-                  <Typography
-                    variant="body2"
-                    component="a"
-                    href="#recuperar"
-                    onClick={(e) => { e.preventDefault(); navigate('/olvide-password'); }}
+                  <Typography 
+                    variant="body2" 
+                    component="a" 
+                    href="#recuperar" 
+                    onClick={(e) => { e.preventDefault(); navigate('/olvide-password'); }} 
                     sx={{ textAlign: 'right', color: '#000000', textDecoration: 'none', fontWeight: 'medium', '&:hover': { textDecoration: 'underline' }, mt: -1 }}
                   >
                     ¿Olvidaste tu contraseña?
@@ -286,132 +258,76 @@ export default function Login() {
               )}
 
               {tabValue === 1 && (
-                <Box component="form" onSubmit={handleRegisterSubmit} autoComplete="off" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Creá tu cuenta y elegí tu carrera para recibir solo las novedades que te corresponden.
-                  </Typography>
+                <Box component="form" onSubmit={handleRegisterSubmit} sx={{ display: 'flex', flexDirection: 'column' }}>
+                  <TextField label="Nombre" fullWidth required size="small" sx={{ mb: 2 }} value={nombre} onChange={(e) => setNombre(e.target.value)} />
+                  <TextField label="Apellido" fullWidth required size="small" sx={{ mb: 2 }} value={apellido} onChange={(e) => setApellido(e.target.value)} />
+                  <TextField label="Correo Electrónico" type="email" fullWidth required size="small" sx={{ mb: 2 }} value={email} onChange={(e) => setEmail(e.target.value)} />
+                  
+                 <TextField 
+  label="Contraseña" 
+  type={mostrarPassword ? 'text' : 'password'} 
+  fullWidth 
+  required 
+  size="small" 
+  sx={{ mb: 3 }} 
+  value={password} 
+  onChange={(e) => setPassword(e.target.value)} 
+  slotProps={{
+    input: {
+      endAdornment: (
+        <InputAdornment position="end">
+          <IconButton onClick={handleClickMostrarPassword} edge="end">
+            {mostrarPassword ? <VisibilityOff /> : <Visibility />}
+          </IconButton>
+        </InputAdornment>
+      ),
+    }
+  }}
+/>
+                  
+                  {selecciones.map((seleccion, index) => (
+                    <Box key={index} sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'flex-start' }}>
+                      <FormControl fullWidth size="small" required>
+                        <InputLabel>Carrera</InputLabel>
+                        <Select
+                          value={seleccion.carreraId}
+                          label="Carrera"
+                          onChange={(e) => handleCarreraChange(index, e.target.value)}
+                        >
+                          {listaCarreras.map((c) => (
+                            <MenuItem key={c.id} value={c.id} disabled={selecciones.some(s => s.carreraId === c.id && s !== seleccion)}>
+                              {c.nombre}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
 
-                  {/* DATOS PERSONALES */}
-                  <Box>
-                    <TituloSeccion>Datos personales</TituloSeccion>
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                      <TextField
-                        label="Nombre" fullWidth required size="small" sx={estiloCampo}
-                        value={nombre} onChange={(e) => setNombre(e.target.value)}
-                        slotProps={{ input: { startAdornment: iconoInicio(PersonOutlineIcon) } }}
-                      />
-                      <TextField
-                        label="Apellido" fullWidth required size="small" sx={estiloCampo}
-                        value={apellido} onChange={(e) => setApellido(e.target.value)}
-                        slotProps={{ input: { startAdornment: iconoInicio(PersonOutlineIcon) } }}
-                      />
-                      <TextField
-                        label="Correo electrónico" type="email" fullWidth required size="small"
-                        sx={{ ...estiloCampo, gridColumn: { sm: '1 / -1' } }}
-                        value={email} onChange={(e) => setEmail(e.target.value)}
-                        slotProps={{ input: { startAdornment: iconoInicio(EmailOutlinedIcon) } }}
-                      />
-                      <TextField
-                        label="Contraseña"
-                        type={mostrarPassword ? 'text' : 'password'}
-                        fullWidth
-                        required
-                        size="small"
-                        sx={{ ...estiloCampo, gridColumn: { sm: '1 / -1' } }}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        helperText="Mínimo 8 caracteres."
-                        // Sin sugerencias ni autocompletado del navegador o de gestores de contraseñas
-                        autoComplete="off"
-                        slotProps={{
-                          input: { startAdornment: iconoInicio(LockOutlinedIcon), endAdornment: botonOjo },
-                          htmlInput: {
-                            autoComplete: 'off',
-                            'data-lpignore': 'true',    // LastPass
-                            'data-1p-ignore': 'true',   // 1Password
-                            'data-form-type': 'other'   // Dashlane
-                          }
-                        }}
-                      />
+                      <FormControl fullWidth size="small" required disabled={!seleccion.carreraId || seleccion.aniosDisponibles.length === 0}>
+                        <InputLabel>Año</InputLabel>
+                        <Select
+                          value={seleccion.anioCarreraId}
+                          label="Año"
+                          onChange={(e) => handleAnioChange(index, e.target.value)}
+                        >
+                          {seleccion.aniosDisponibles.map((a) => (
+                            <MenuItem key={a.anioCarreraId} value={a.anioCarreraId}>
+                              {a.numero}° Año
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+
+                      <IconButton color="error" onClick={() => eliminarFila(index)} disabled={selecciones.length === 1}>
+                        <DeleteIcon />
+                      </IconButton>
                     </Box>
-                  </Box>
+                  ))}
 
-                  {/* CARRERAS */}
-                  <Box>
-                    <TituloSeccion>Tus carreras</TituloSeccion>
+                  <Button onClick={agregarFila} sx={{ alignSelf: 'flex-start', mb: 3, textTransform: 'none', fontWeight: 'bold', color: '#f7a600' }}>
+                    + Añadir otra carrera
+                  </Button>
 
-                    {selecciones.map((seleccion, index) => (
-                      <Paper
-                        key={index}
-                        variant="outlined"
-                        sx={{ p: 1.5, mb: 1.5, borderRadius: 2, bgcolor: '#f8fafc', borderColor: '#e2e8f0' }}
-                      >
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                          <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b' }}>
-                            Carrera {index + 1}
-                          </Typography>
-                          <IconButton
-                            size="small"
-                            color="error"
-                            aria-label="Quitar carrera"
-                            onClick={() => eliminarFila(index)}
-                            disabled={selecciones.length === 1}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Box>
-
-                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '3fr 2fr' }, gap: 1.5 }}>
-                          <FormControl fullWidth size="small" required sx={estiloCampo}>
-                            <InputLabel>Carrera</InputLabel>
-                            <Select
-                              value={seleccion.carreraId}
-                              label="Carrera"
-                              onChange={(e) => handleCarreraChange(index, e.target.value)}
-                              sx={{ bgcolor: '#ffffff' }}
-                            >
-                              {listaCarreras.map((c) => (
-                                <MenuItem key={c.id} value={c.id} disabled={selecciones.some(s => s.carreraId === c.id && s !== seleccion)}>
-                                  {c.nombre}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-
-                          <FormControl fullWidth size="small" required sx={estiloCampo} disabled={!seleccion.carreraId || seleccion.aniosDisponibles.length === 0}>
-                            <InputLabel>Año</InputLabel>
-                            <Select
-                              value={seleccion.anioCarreraId}
-                              label="Año"
-                              onChange={(e) => handleAnioChange(index, e.target.value)}
-                              sx={{ bgcolor: '#ffffff' }}
-                            >
-                              {seleccion.aniosDisponibles.map((a) => (
-                                <MenuItem key={a.anioCarreraId} value={a.anioCarreraId}>
-                                  {a.numero}° Año
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        </Box>
-                      </Paper>
-                    ))}
-
-                    <Button
-                      onClick={agregarFila}
-                      fullWidth
-                      startIcon={<AddRoundedIcon />}
-                      sx={{
-                        textTransform: 'none', fontWeight: 'bold', color: '#f7a600',
-                        border: '1.5px dashed #f7a600', borderRadius: 2, py: 1,
-                        '&:hover': { bgcolor: '#fffbeb', borderColor: '#bc7e01', color: '#bc7e01' }
-                      }}
-                    >
-                      Añadir otra carrera
-                    </Button>
-                  </Box>
-
-                  <Button type="submit" disabled={loading} variant="contained" size="large" sx={{ bgcolor: '#f7a600', '&:hover': { bgcolor: '#bc7e01' }, py: 1.5, fontWeight: 'bold', color: '#ffffff', borderRadius: 2, boxShadow: 'none' }}>
+                  <Button type="submit" disabled={loading} variant="contained" size="large" sx={{ bgcolor: '#f7a600', '&:hover': { bgcolor: '#bc7e01' }, py: 1.5, fontWeight: 'bold', color: '#ffffff' }}>
                     {loading ? 'Registrando...' : 'Completar Registro'}
                   </Button>
                 </Box>
