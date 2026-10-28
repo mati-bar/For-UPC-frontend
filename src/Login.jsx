@@ -14,6 +14,16 @@ import logoUPC from './assets/logo-sede-laboulaye.png';
 // URL base del backend: en Vercel viene de VITE_API_URL, en local usa localhost
 const API_URL = import.meta.env.VITE_API_URL || 'https://for-upc-backend.onrender.com';
 
+// Chrome, Edge y Safari ofrecen "usar contraseña segura sugerida" en los campos type="password" de un
+// formulario de registro, y autocomplete="off" lo ignoran. Para que no aparezca, el campo de contraseña
+// del registro es un campo de texto común que muestra puntos (-webkit-text-security). Si el navegador no
+// soporta esa propiedad (por ejemplo Firefox), se usa un campo type="password" normal, para no mostrar
+// nunca la contraseña en pantalla.
+const soportaOcultarTexto =
+  typeof CSS !== 'undefined' &&
+  typeof CSS.supports === 'function' &&
+  CSS.supports('-webkit-text-security', 'disc');
+
 const orangeTheme = createTheme({
   palette: {
     primary: {
@@ -222,25 +232,25 @@ export default function Login() {
                   <TextField label="Correo electrónico" type="email" fullWidth required size="small" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} />
                   
                   <TextField 
-  label="Contraseña" 
-  type={mostrarPassword ? 'text' : 'password'} 
-  fullWidth 
-  required 
-  size="small" 
-  value={loginPassword} 
-  onChange={(e) => setLoginPassword(e.target.value)} 
-  slotProps={{
-    input: {
-      endAdornment: (
-        <InputAdornment position="end">
-          <IconButton onClick={handleClickMostrarPassword} edge="end">
-            {mostrarPassword ? <VisibilityOff /> : <Visibility />}
-          </IconButton>
-        </InputAdornment>
-      ),
-    }
-  }}
-/>
+                    label="Contraseña" 
+                    type={mostrarPassword ? 'text' : 'password'} 
+                    fullWidth 
+                    required 
+                    size="small" 
+                    value={loginPassword} 
+                    onChange={(e) => setLoginPassword(e.target.value)} 
+                    slotProps={{
+                      input: {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton onClick={handleClickMostrarPassword} edge="end">
+                              {mostrarPassword ? <VisibilityOff /> : <Visibility />}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }
+                    }}
+                  />
 
                   <Typography 
                     variant="body2" 
@@ -258,32 +268,54 @@ export default function Login() {
               )}
 
               {tabValue === 1 && (
-                <Box component="form" onSubmit={handleRegisterSubmit} sx={{ display: 'flex', flexDirection: 'column' }}>
+                <Box component="form" onSubmit={handleRegisterSubmit} autoComplete="off" sx={{ display: 'flex', flexDirection: 'column' }}>
                   <TextField label="Nombre" fullWidth required size="small" sx={{ mb: 2 }} value={nombre} onChange={(e) => setNombre(e.target.value)} />
                   <TextField label="Apellido" fullWidth required size="small" sx={{ mb: 2 }} value={apellido} onChange={(e) => setApellido(e.target.value)} />
                   <TextField label="Correo Electrónico" type="email" fullWidth required size="small" sx={{ mb: 2 }} value={email} onChange={(e) => setEmail(e.target.value)} />
                   
-                 <TextField 
-  label="Contraseña" 
-  type={mostrarPassword ? 'text' : 'password'} 
-  fullWidth 
-  required 
-  size="small" 
-  sx={{ mb: 3 }} 
-  value={password} 
-  onChange={(e) => setPassword(e.target.value)} 
-  slotProps={{
-    input: {
-      endAdornment: (
-        <InputAdornment position="end">
-          <IconButton onClick={handleClickMostrarPassword} edge="end">
-            {mostrarPassword ? <VisibilityOff /> : <Visibility />}
-          </IconButton>
-        </InputAdornment>
-      ),
-    }
-  }}
-/>
+                  {/* Contraseña del registro: sin sugerencias de contraseña del navegador ni de gestores */}
+                  <TextField 
+                    label="Contraseña" 
+                    type={mostrarPassword || soportaOcultarTexto ? 'text' : 'password'} 
+                    fullWidth 
+                    required 
+                    size="small" 
+                    autoComplete="off"
+                    sx={{
+                      mb: 3,
+                      // Muestra puntos en lugar de texto, salvo que se haya tocado el ojito
+                      '& input': soportaOcultarTexto
+                        ? { WebkitTextSecurity: mostrarPassword ? 'none' : 'disc' }
+                        : {}
+                    }} 
+                    value={password} 
+                    onChange={(e) => setPassword(e.target.value)} 
+                    slotProps={{
+                      input: {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              aria-label={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                              onClick={handleClickMostrarPassword}
+                              onMouseDown={(e) => e.preventDefault()}
+                              edge="end"
+                            >
+                              {mostrarPassword ? <VisibilityOff /> : <Visibility />}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      },
+                      htmlInput: {
+                        autoComplete: 'off',
+                        autoCapitalize: 'off',  // el teclado del celular no corrige ni sugiere palabras
+                        autoCorrect: 'off',
+                        spellCheck: false,
+                        'data-lpignore': 'true',    // LastPass
+                        'data-1p-ignore': 'true',   // 1Password
+                        'data-form-type': 'other'   // Dashlane
+                      }
+                    }}
+                  />
                   
                   {selecciones.map((seleccion, index) => (
                     <Box key={index} sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'flex-start' }}>
