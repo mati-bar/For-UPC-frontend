@@ -13,26 +13,26 @@ Plataforma web desarrollada para la comunidad universitaria de la Universidad Pr
 
 ##  Enlaces del Despliegue
 
-* **Frontend (Vercel):** [for-upc-frontend.vercel.app]
-* **Backend (Render):** [Pegar acá el link del backend de Render]
-* **Swagger (Documentación API):** [Pegar acá el link de Swagger]
+* **Frontend (Vercel):** https://for-upc-frontend.vercel.app/
+* **Backend (Render):** https://for-upc-backend.onrender.com/
+* **Swagger (Documentación API):** https://for-upc-backend.onrender.com/swagger-ui/index.html
 
 ##  Usuarios de Prueba
 
 Para probar el sistema sin necesidad de registrarse, utilizar las siguientes credenciales:
 
 * **Administrador:**
-  * Email: [email_admin_prueba]
-  * Contraseña: [password_admin_prueba]
+  * Email: adminforupc@sedelbye.com
+  * Contraseña: sedelbyelefebvre
 
 * **Estudiante:**
-  * Email: [email_estudiante_prueba]
-  * Contraseña: [password_estudiante_prueba]
+  * Email: estudiante@sedelbye.com
+  * Contraseña: estudiante1234
 
 ##  Cómo correr el proyecto en local
 
 1. Clonar el repositorio y entrar a la carpeta:
-git clone https://github.com/[usuario]/[repositorio].git
+git clone https://github.com/mati-bar/For-UPC-frontend.git
 cd For-UPC-frontend
 
 2. Instalar las dependencias:
